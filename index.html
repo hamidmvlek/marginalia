@@ -55,7 +55,7 @@ p { margin: 0; }
 .stage { position: fixed; inset: 0; overflow: hidden; }
 
 /* aura: the current cover, dissolved */
-.aura { position: absolute; z-index: 0; right: 6vw; top: 20vh; width: min(58vw, 760px); height: 68vh; pointer-events: none; opacity: var(--aura-o); transition: opacity .6s; }
+.aura { position: absolute; z-index: 0; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(58vw, 760px); height: 68vh; pointer-events: none; opacity: var(--aura-o); transition: opacity .6s; }
 .aura img { width: 100%; height: 100%; object-fit: cover; filter: blur(70px) saturate(1.25); transform: scale(.9); border-radius: 40%; }
 .aura.swap { opacity: 0; }
 
@@ -176,7 +176,7 @@ p { margin: 0; }
   .ticker { font-size: 12.5px; }
   .ticker.hide { opacity: 0; pointer-events: none; }
   .status, .toast { bottom: calc(40px + env(safe-area-inset-bottom, 0px)); }
-  .aura { left: -10vw; right: -10vw; width: auto; top: 26vh; height: 60vh; }
+  .aura { left: -10vw; right: -10vw; width: auto; top: 50%; transform: translateY(-50%); height: 60vh; }
   .opts { grid-template-columns: 1fr; }
   .opt label { padding-block: 5px; font-size: 15px; }
   .book input { font-size: 16px; }
@@ -690,7 +690,7 @@ function draw() {
 /* ================= Motion & camera ================= */
 const stage = $("#stage"), svg = $("#canvas"), world = $("#world");
 let cam = { x: 0, y: 0, k: 1 }, camT = null, inertia = null, raf = 0;
-const applyCam = () => world.setAttribute("transform", `translate(${cam.x.toFixed(2)},${cam.y.toFixed(2)}) scale(${cam.k.toFixed(4)})`);
+const applyCam = () => { const c = lockCam(cam); cam.x = c.x; cam.y = c.y; cam.k = c.k; world.setAttribute("transform", `translate(${cam.x.toFixed(2)},${cam.y.toFixed(2)}) scale(${cam.k.toFixed(4)})`); };
 function kick() { if (!raf) raf = requestAnimationFrame(tick); }
 function tick(t) {
   raf = 0; let moving = false;
@@ -706,6 +706,7 @@ function tick(t) {
     if (v.dying && v.o < .03) { v.el.remove(); v.edge?.remove(); V.delete(id); }
   }
   if (camT) {
+    camT = lockCam(camT);
     const f = reduced ? 1 : .15;
     cam.x += (camT.x - cam.x) * f; cam.y += (camT.y - cam.y) * f; cam.k += (camT.k - cam.k) * f;
     if (Math.abs(camT.x - cam.x) < .3 && Math.abs(camT.y - cam.y) < .3 && Math.abs(camT.k - cam.k) < .001) { cam = { ...camT }; camT = null; } else moving = true;
@@ -724,6 +725,23 @@ function viewport() {
   else top = Math.min(Hh * .42, Math.max(...[".c1", ".c2", ".c3"].map(s => $(s).getBoundingClientRect().bottom)) + 16);
   const bottom = phone() && $("#panel").classList.contains("open") ? $("#panel").getBoundingClientRect().height : 36;
   return { w: W, h: Hh - top - bottom, top };
+}
+/* keep the map on screen: the camera can't drift away from it */
+function contentBox() {
+  if (!visible.length) return null;
+  let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity;
+  for (const n of visible) { a = Math.min(a, n._x - n._w / 2); c = Math.max(c, n._x + n._w / 2); b = Math.min(b, n._y - n._h / 2); d = Math.max(d, n._y + n._h / 2); }
+  return { a, b, c, d };
+}
+function lockAxis(off, lo, hi, v0, v1) {
+  // free to move, but a good part of the map always stays on screen
+  const m = Math.min(180, (hi - lo) / 2, (v1 - v0) / 2);
+  return clamp(off, v0 + m - hi, v1 - m - lo);
+}
+function lockCam(t) {
+  const box = contentBox(); if (!box) return t;
+  const vp = viewport();
+  return { k: t.k, x: lockAxis(t.x, box.a * t.k, box.c * t.k, 0, vp.w), y: lockAxis(t.y, box.b * t.k, box.d * t.k, vp.top, vp.top + vp.h) };
 }
 function fit(instant) {
   if (!visible.length) return;

@@ -1,0 +1,1324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Marginalia">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#F2F2EF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B0B0A" media="(prefers-color-scheme: dark)">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<title>Marginalia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&display=swap">
+<style>
+/* Layout: four columns of small type across the top, an open canvas below with the book's cover dissolved into the background, a slow ticker of branches along the bottom. */
+:root {
+  --bg: #F2F2EF; --solid: #FFFFFF; --ink: #111111; --ink-2: #74746D; --ink-3: #A9A9A2; --hl: #E3E3DE;
+  --fb: "Inter Tight", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --aura-o: .62;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0B0B0A; --solid: #000000; --ink: #ECECE7; --ink-2: #8B8B85; --ink-3: #56564F; --hl: #1F1F1C; --aura-o: .5;
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #0B0B0A; --solid: #000000; --ink: #ECECE7; --ink-2: #8B8B85; --ink-3: #56564F; --hl: #1F1F1C; --aura-o: .5;
+  color-scheme: dark;
+}
+html, body { height: 100%; margin: 0; }
+/* the page itself never zooms or rubber-bands; only the map pans and zooms */
+html, body { overscroll-behavior: none; touch-action: pan-x pan-y; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { position: fixed; inset: 0; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+@media (pointer: coarse) { input, textarea, select { font-size: 16px !important; } }
+.keyin { width: 100%; border: 0; border-bottom: 1px solid var(--ink-3); background: none; color: var(--ink); padding: 8px 0; font: 400 16px/1.4 var(--fb); border-radius: 0; }
+.keyin:focus { outline: none; border-bottom-color: var(--ink); }
+body { background: var(--bg); color: var(--ink); font: 400 12.5px/1.28 var(--fb); overflow: hidden; -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 1px solid var(--ink); outline-offset: 2px; }
+p { margin: 0; }
+.h { text-transform: uppercase; letter-spacing: .01em; }
+.dim { color: var(--ink-2); }
+.ln { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; text-decoration-color: var(--ink-3); }
+.ln:hover { text-decoration-color: var(--ink); }
+.ln[disabled] { opacity: .4; cursor: default; }
+
+.stage { position: fixed; inset: 0; overflow: hidden; }
+
+/* aura: the current cover, dissolved */
+.aura { position: absolute; z-index: 0; right: 6vw; top: 20vh; width: min(58vw, 760px); height: 68vh; pointer-events: none; opacity: var(--aura-o); transition: opacity .6s; }
+.aura img { width: 100%; height: 100%; object-fit: cover; filter: blur(70px) saturate(1.25); transform: scale(.9); border-radius: 40%; }
+.aura.swap { opacity: 0; }
+
+#canvas { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+#canvas.panning { cursor: grabbing; }
+.n { cursor: pointer; }
+.n:hover .hl { opacity: 1 !important; }
+.n.busy .hl { opacity: 1 !important; animation: pulse 1s ease-in-out infinite; }
+.n.editing { opacity: .1 !important; }
+@keyframes pulse { 50% { opacity: .2; } }
+
+/* reveal: hover a title, the blur clears */
+.reveal { position: absolute; inset: 0; z-index: 5; background: var(--solid); display: grid; place-items: center; opacity: 0; pointer-events: none; transition: opacity .35s ease; }
+.reveal img { height: min(62vh, 640px); max-width: 60vw; object-fit: contain; filter: blur(48px); transform: scale(1.06); transition: filter .55s cubic-bezier(.2,.7,.2,1), transform .55s cubic-bezier(.2,.7,.2,1); }
+.reveal.on { opacity: 1; }
+.reveal.on img { filter: blur(0); transform: none; }
+
+/* columns */
+.cols { position: absolute; z-index: 10; top: 0; left: 0; right: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 28px; padding-block: 12px 18px; padding-left: max(18px, env(safe-area-inset-left, 0px)); padding-right: max(18px, env(safe-area-inset-right, 0px)); pointer-events: none; }
+.cols > section { pointer-events: auto; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.cols > section > div { display: grid; gap: 0; }
+.cols > .cm { display: none; }
+
+.lib { list-style: none; margin: 0; padding: 0; max-height: 34vh; overflow-y: auto; scrollbar-width: none; }
+.lib li { display: grid; grid-template-columns: 22px 1fr auto; align-items: baseline; }
+.lib li .no { font-variant-numeric: tabular-nums; }
+.lib li .open { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib li.on .open { text-decoration: underline; text-underline-offset: 2px; }
+.lib li .x { color: var(--ink-3); padding-left: 8px; opacity: 0; }
+.lib li:hover .x, .lib li .x:focus-visible, .lib li .x.confirm { opacity: 1; }
+.lib li .x:hover, .lib li .x.confirm { color: var(--ink); }
+.lib .thumb { display: none; }
+
+.links { display: flex; flex-wrap: wrap; gap: 0 10px; }
+.panel { max-height: calc(100vh - 140px); overflow-y: auto; scrollbar-width: none; }
+.panel textarea { font: inherit; color: var(--ink); background: none; border: 0; padding: 0; resize: none; width: 100%; field-sizing: content; }
+.panel textarea:focus { outline: none; }
+.panel textarea.t { font-size: 15px; font-weight: 500; line-height: 1.2; min-height: 1.2em; }
+.panel textarea.no { min-height: 3.9em; color: var(--ink); }
+.panel textarea.no::placeholder { color: var(--ink-3); }
+.panel .crumbs button { color: var(--ink-2); }
+.panel .crumbs button:hover { color: var(--ink); }
+.err { color: var(--ink); border-left: 1px solid var(--ink); padding-left: 8px; }
+.keys { display: grid; grid-template-columns: 74px 1fr; color: var(--ink-2); }
+.keys span:nth-child(odd) { color: var(--ink); }
+.sheetclose { display: none; }
+
+/* ticker */
+.ticker { position: absolute; z-index: 6; left: 0; right: 0; bottom: 0; padding-bottom: max(10px, env(safe-area-inset-bottom, 0px)); overflow: hidden; white-space: nowrap; }
+.ticker .track { display: inline-flex; gap: 22px; padding-left: 22px; animation: tick var(--dur, 60s) linear infinite; }
+.ticker:hover .track { animation-play-state: paused; }
+.ticker button { white-space: nowrap; }
+.ticker sup { font-size: 8px; margin-right: 4px; vertical-align: 5px; }
+@keyframes tick { to { transform: translateX(-50%); } }
+
+.status { position: absolute; z-index: 7; left: 50%; bottom: 44px; transform: translateX(-50%); display: flex; gap: 14px; align-items: baseline; background: var(--solid); padding: 7px 12px; white-space: nowrap; max-width: calc(100% - 32px); }
+.toast { position: absolute; z-index: 7; left: 50%; bottom: 44px; transform: translate(-50%, 6px); background: var(--ink); color: var(--bg); padding: 7px 12px; opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; max-width: calc(100% - 32px); }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+#editor { position: absolute; z-index: 12; resize: none; border: 0; border-bottom: 1px solid var(--ink); background: var(--solid); color: var(--ink); padding: 3px 4px; font-family: var(--fb); line-height: 1.22; overflow: hidden; outline: none; }
+
+/* import sheet */
+.scrim { position: fixed; inset: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); display: grid; place-items: center; padding-block: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-bottom, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); animation: fade .2s ease; }
+@keyframes fade { from { opacity: 0; } }
+.sheet { width: min(520px, 100%); max-height: 100%; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
+.sheet .top { display: flex; justify-content: space-between; gap: 12px; }
+.drop { border: 1px dashed var(--ink-2); padding: 44px 18px; display: grid; justify-items: center; gap: 6px; text-align: center; transition: background .15s; }
+.drop.over { background: var(--solid); border-style: solid; }
+.drop .big { font-size: 22px; font-weight: 500; letter-spacing: -.01em; }
+.paste { width: 100%; min-height: 130px; border: 1px solid var(--ink-3); background: var(--solid); color: var(--ink); padding: 8px; font: 400 16px/1.4 var(--fb); resize: vertical; }
+.book { display: grid; grid-template-columns: 92px 1fr; gap: 16px; align-items: start; }
+.book img { width: 92px; aspect-ratio: 2 / 3; object-fit: cover; background: var(--hl); }
+.book .f { display: grid; gap: 4px; min-width: 0; }
+.book input { font: inherit; color: var(--ink); background: none; border: 0; border-bottom: 1px solid var(--ink-3); padding: 3px 0; width: 100%; }
+.book input:focus { outline: none; border-color: var(--ink); }
+.book input.bt { font-size: 18px; font-weight: 500; }
+.opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.opt { display: grid; gap: 2px; }
+.opt label { display: grid; grid-template-columns: 16px 1fr; cursor: pointer; color: var(--ink-2); }
+.opt label:has(input:checked) { color: var(--ink); }
+.opt input { position: absolute; opacity: 0; pointer-events: none; }
+.opt label::before { content: "○"; }
+.opt label:has(input:checked)::before { content: "●"; }
+.opt label:has(input:focus-visible) { outline: 1px solid var(--ink); }
+.go { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--ink); padding-top: 10px; }
+.go .big { font-size: 18px; font-weight: 500; }
+
+/* ---------- phone ---------- */
+@media (max-width: 720px) {
+  body { font-size: 13.5px; }
+  .cols { display: block; padding-block: max(10px, env(safe-area-inset-top, 0px)) 0; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); background: linear-gradient(var(--bg) 78%, transparent); padding-bottom: 14px; }
+  .c1, .c3 { display: none !important; }
+  .cm { display: flex !important; flex-direction: column; gap: 6px; }
+  .cm .row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .cm .row button { padding-block: 6px; }
+  .cm .tt { font-size: 17px; font-weight: 500; letter-spacing: -.01em; line-height: 1.15; }
+  .cm .tools { display: flex; gap: 16px; overflow-x: auto; scrollbar-width: none; padding-block: 4px; margin-inline: -16px; padding-inline: 16px; }
+  .cm .tools::-webkit-scrollbar { display: none; }
+  .cm .tools button { white-space: nowrap; padding-block: 4px; }
+  /* books overlay */
+  .c2 { position: fixed; inset: 0; z-index: 15; background: var(--bg); padding-block: max(14px, env(safe-area-inset-top, 0px)) max(14px, env(safe-area-inset-bottom, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); transform: translateY(102%); transition: transform .32s cubic-bezier(.2,.8,.2,1); overflow-y: auto; }
+  .c2.open { transform: none; }
+  .c2 .closebooks { display: inline !important; }
+  .lib { max-height: none; }
+  .lib li { grid-template-columns: 26px 44px 1fr auto; align-items: center; gap: 0 10px; padding-block: 8px; border-bottom: 1px solid var(--hl); }
+  .lib .thumb { display: block; width: 44px; aspect-ratio: 2/3; object-fit: cover; background: var(--hl); }
+  .lib li .open { white-space: normal; font-size: 15px; padding-block: 6px; }
+  .lib li .x { opacity: 1; padding: 8px 0 8px 8px; }
+  /* idea sheet */
+  .panel { position: fixed; z-index: 14; left: 0; right: 0; bottom: 0; max-height: 56dvh; background: var(--solid); padding: 14px max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); box-shadow: 0 -1px 0 var(--hl); transform: translateY(105%); transition: transform .3s cubic-bezier(.2,.8,.2,1); }
+  .panel.open { transform: none; }
+  .panel .grab { display: block !important; width: 36px; height: 4px; border-radius: 2px; background: var(--ink-3); margin: -4px auto 2px; }
+  .panel .links { gap: 4px 18px; }
+  .panel .links button { padding-block: 7px; font-size: 14.5px; }
+  .panel textarea { font-size: 16px; }
+  .panel textarea.t { font-size: 18px; }
+  .keys { display: none; }
+  .sheetclose { display: inline; }
+  .ticker { font-size: 12.5px; }
+  .ticker.hide { opacity: 0; pointer-events: none; }
+  .status, .toast { bottom: calc(40px + env(safe-area-inset-bottom, 0px)); }
+  .aura { left: -10vw; right: -10vw; width: auto; top: 26vh; height: 60vh; }
+  .opts { grid-template-columns: 1fr; }
+  .opt label { padding-block: 5px; font-size: 15px; }
+  .book input { font-size: 16px; }
+  .book input.bt { font-size: 19px; }
+  #editor { font-size: 16px !important; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .ticker { overflow-x: auto; } }
+</style>
+</head>
+<body>
+<main class="stage" id="stage">
+  <div class="aura" id="aura"><img id="auraImg" alt=""></div>
+  <svg id="canvas" aria-label="Mind map"><g id="world"><g id="edges"></g><g id="nodes"></g></g></svg>
+  <div class="reveal" id="reveal"><img id="revealImg" alt=""></div>
+  <textarea id="editor" hidden spellcheck="false" aria-label="Edit idea"></textarea>
+
+  <header class="cols" id="cols">
+    <section class="cm">
+      <div class="row"><span class="h">Marginalia</span><span><button class="ln" type="button" data-act="books">Books</button>&nbsp;&nbsp;&nbsp;<button class="ln" type="button" data-act="newBook">Map a book ↗</button></span></div>
+      <div class="tt" id="mTitle"></div>
+      <div class="dim" id="mMeta"></div>
+      <div class="tools">
+        <button type="button" data-act="level1">Branches</button><button type="button" data-act="level2">Ideas</button><button type="button" data-act="level99">All</button>
+        <button type="button" data-act="fit">Fit</button><button type="button" data-act="undo">Undo</button><button type="button" data-act="redo">Redo</button>
+        <button type="button" data-act="png">Save image</button><button type="button" data-act="md">Outline</button><button type="button" data-act="newBlank">Blank map</button><button type="button" data-act="key">API key</button>
+      </div>
+    </section>
+
+    <section class="c1">
+      <div><span class="h">Marginalia</span>
+        <p>Mind maps drawn from the books you read. Drop a PDF or EPUB anywhere on this page and the map grows in front of you, idea by idea.</p></div>
+      <div><button class="ln" type="button" data-act="newBook">Map a book ↗</button><button class="ln" type="button" data-act="newBlank" style="justify-self:start">Start a blank map</button></div>
+      <div class="dim"><span id="usage"></span><span id="storeNote">Saved on this device only.</span> <button class="ln" type="button" data-act="key" id="keyLink">API key</button></div>
+    </section>
+
+    <section class="c2" id="books">
+      <div class="h" style="display:flex;justify-content:space-between"><span>Books</span><button class="ln closebooks" type="button" data-act="books" style="display:none">Close</button></div>
+      <ol class="lib" id="lib"></ol>
+    </section>
+
+    <section class="c3">
+      <div><span class="h">This map</span><span id="mapTitle"></span><span class="dim" id="mapMeta"></span></div>
+      <div><span class="h">View</span>
+        <div class="links"><button class="ln" type="button" data-act="level1">Branches</button><button class="ln" type="button" data-act="level2">Ideas</button><button class="ln" type="button" data-act="level99">All</button></div>
+        <div class="links"><button class="ln" type="button" data-act="fit">Fit</button><button class="ln" type="button" data-act="zoomOut">Zoom out</button><button class="ln" type="button" data-act="zoomIn">Zoom in</button></div>
+        <div class="links"><button class="ln" type="button" data-act="undo">Undo</button><button class="ln" type="button" data-act="redo">Redo</button></div></div>
+      <div><span class="h">Export</span>
+        <div class="links"><button class="ln" type="button" data-act="png">Image</button><button class="ln" type="button" data-act="md">Outline</button><button class="ln" type="button" data-act="copy">Copy outline</button></div></div>
+    </section>
+
+    <section class="c4 panel" id="panel"></section>
+  </header>
+
+  <div class="ticker" id="ticker"><div class="track" id="track"></div></div>
+  <div class="status" id="status" hidden></div>
+  <div class="toast" id="toast" role="status"></div>
+</main>
+
+<div class="scrim" id="scrim" hidden><div class="sheet" role="dialog" aria-modal="true" aria-label="Map a book" id="sheet"></div></div>
+<input type="file" id="fileInput" accept=".pdf,.epub,.txt,.md,application/pdf,application/epub+zip,text/plain" hidden>
+
+<script>
+(() => {
+"use strict";
+const $ = s => document.querySelector(s);
+const NS = "http://www.w3.org/2000/svg";
+const newId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-3);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pad2 = n => String(n).padStart(2, "0");
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const phone = () => innerWidth <= 720;
+const PDFJS = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+const PDFW = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+const JSZIP = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+
+/* ================= Example ================= */
+const N = (text, note, ref, children = []) => ({ id: newId(), text, note, ref, children });
+const exampleMap = () => ({
+  id: "example-meditations", example: true, author: "Marcus Aurelius", focus: "ideas", created: Date.now(), updated: Date.now() - 864e5,
+  root: N("Meditations", "Private notes the Roman emperor wrote to himself on how to live well as a Stoic while carrying an empire.", "Books 1–12", [
+    N("The inner citadel", "The mind is a fortress nothing outside can enter unless we let it.", "Books 4, 8", [
+      N("Retreat into yourself", "Your own mind is the quietest place there is.", "4.3"),
+      N("Events don't disturb us", "Distress comes from our opinion of things, not the things.", "4.7", [
+        N("Remove the judgment", "Drop “I have been harmed” and the harm goes with it.", "4.7"),
+        N("Pause before assent", "Test each first impression before agreeing with it.", "8.49")]),
+      N("The ruling faculty", "Reason is the one part of you fully your own.", "5.11")]),
+    N("Nature and the whole", "Everything belongs to one rational, ordered cosmos.", "Books 4, 7", [
+      N("Live according to nature", "Humans are rational and social; live for the common good.", "4.39"),
+      N("All things are woven together", "Every event is linked in a single fabric.", "7.9"),
+      N("The river of change", "Everything flows and is replaced; that is how nature works.", "4.36", [
+        N("Nothing to fear in change", "Nothing useful happens without change.", "7.18")])]),
+    N("Death and impermanence", "Remembering life's shortness keeps attention on what matters.", "Books 2, 4, 9", [
+      N("Act as if it's your last", "Do each thing as the final act of your life.", "2.5"),
+      N("Fame is fleeting", "Those who praise you will soon be forgotten too.", "4.19"),
+      N("The view from above", "See cities and lives from a height; worries shrink.", "9.30"),
+      N("Death is natural", "A scattering of elements, as natural as birth.", "2.12")]),
+    N("Virtue is the only good", "Character is good in itself; all else is indifferent.", "Books 3, 6", [
+      N("Justice", "Acting for the shared good is what we are for.", "5.6"),
+      N("Wisdom", "Seeing things as they are, without our labels.", "6.13"),
+      N("Courage and self-control", "Endure what comes; refuse what pulls you off course.", "3.6"),
+      N("Indifferents", "Wealth, health and fame are neither good nor bad.", "2.11")]),
+    N("Dealing with others", "People will frustrate you; stay kind and keep working with them.", "Books 2, 6", [
+      N("Expect difficult people", "Each morning, prepare to meet the ungrateful and arrogant.", "2.1", [
+        N("They act from ignorance", "Wrongdoing comes from mistaking bad for good.", "2.1"),
+        N("Made to work together", "Like hands and feet, we exist to cooperate.", "2.1")]),
+      N("The best revenge", "Don't become like the one who wronged you.", "6.6"),
+      N("Gratitude to teachers", "Book 1 lists what he learned from each mentor.", "Book 1")]),
+    N("Daily practice", "Stoicism as exercises repeated daily, not theory.", "Books 2, 5", [
+      N("Get out of bed", "You were born to do a human's work, not lie warm.", "5.1"),
+      N("Only the present", "The present is the only thing anyone can lose.", "2.14"),
+      N("Writing as training", "Restating principles until they become habit.", "Books 1–12")]),
+    N("Duty and leadership", "Power is a role to fill well, not a reason to change.", "Books 1, 6", [
+      N("Don't be Caesarified", "Stay simple, honest and kind while in power.", "6.30"),
+      N("The model of Antoninus", "His adoptive father showed patience and fairness.", "1.16"),
+      N("Good for the hive", "What harms the hive harms the bee.", "6.54")])
+  ])
+});
+
+/* ================= Storage ================= */
+const LS = "marginalia.maps.v1", US = "marginalia.usage.v1";
+const strip = (k, v) => (k[0] === "_" ? undefined : v);
+let maps = {};
+const store = {
+  loadLocal() { try { return JSON.parse(localStorage.getItem(LS) || "{}") || {}; } catch { return {}; } },
+  saveLocal() { try { localStorage.setItem(LS, JSON.stringify(maps, strip)); } catch {} },
+  put() { this.saveLocal(); },
+  del() { this.saveLocal(); }
+};
+const books = (() => {
+  let p;
+  const open = () => p ||= new Promise((res, rej) => { const r = indexedDB.open("marginalia", 2); r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains("books")) r.result.createObjectStore("books"); }; r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+  return {
+    async put(k, v) { try { const db = await open(); await new Promise((res, rej) => { const tx = db.transaction("books", "readwrite"); tx.objectStore("books").put(v, k); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); } catch {} },
+    async get(k) { try { const db = await open(); return await new Promise((res, rej) => { const r = db.transaction("books").objectStore("books").get(k); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); } catch { return null; } },
+    async del(k) { try { const db = await open(); db.transaction("books", "readwrite").objectStore("books").delete(k); } catch {} }
+  };
+})();
+
+/* ================= Claude, sparingly ================= */
+// Your own API key, kept only in this browser. Nothing else ever sees it except api.anthropic.com.
+const KEY = "marginalia.key.v1", API = "https://api.anthropic.com/v1/";
+const getKey = () => { try { return localStorage.getItem(KEY) || ""; } catch { return ""; } };
+const setKey = k => { try { k ? localStorage.setItem(KEY, k) : localStorage.removeItem(KEY); } catch {} };
+const apiHeaders = key => ({ "content-type": "application/json", "x-api-key": key, "anthropic-version": "2026-10-21", "anthropic-dangerous-direct-browser-access": "true" });
+const MODELS = { quick: "claude-haiku-5-5", default: "claude-sonnet-5-5" };
+const PRICE = { "claude-haiku-5-5": [.1, .5], "claude-sonnet-5-5": [2, 10] }; // $ per million tokens, in / out
+const monthKey = () => new Date().toISOString().slice(0, 7);
+function usage() { try { const u = JSON.parse(localStorage.getItem(US) || "{}"); return u.m === monthKey() ? u : { t: 0, d: 0 }; } catch { return { t: 0, d: 0 }; } }
+function track(model, inT, outT) {
+  const u = usage(), [pi, po] = PRICE[model] || [0, 0];
+  try { localStorage.setItem(US, JSON.stringify({ m: monthKey(), t: (u.t || 0) + inT + outT, d: (u.d || 0) + (inT * pi + outT * po) / 1e6 })); } catch {}
+  renderUsage();
+}
+const fmtTok = t => t < 1000 ? Math.round(t) + "" : (t / 1000).toFixed(t < 10000 ? 1 : 0) + "k";
+function renderUsage() { const u = usage(); $("#usage").textContent = u.t ? `${fmtTok(u.t)} tokens this month (about $${u.d < .01 ? "0.01" : u.d.toFixed(2)}). ` : ""; }
+const httpCode = (s, m) => s === 401 || s === 403 ? "auth" : s === 429 ? "rate_limited" : s === 413 ? "prompt_too_large" : s === 529 || s === 503 ? "overloaded" : /credit/i.test(m) ? "credit" : "api";
+// Every call goes through here: the light model by default, no thinking, low effort, streamed, usage counted from the API's own numbers.
+async function ask(prompt, { modelTier = "quick", signal, onText } = {}) {
+  const key = getKey(); if (!key) throw { code: "no_key" };
+  const model = MODELS[modelTier] || MODELS.quick, sharp = model !== MODELS.quick, headers = apiHeaders(key);
+  const body = { model, max_tokens: 8000, stream: true, messages: [{ role: "user", content: prompt }], output_config: { effort: "low" } };
+  if (sharp) { headers["anthropic-beta"] = "server-side-fallback-2026-07-01"; body.fallbacks = "default"; }
+  else body.thinking = { type: "disabled" };
+  let text = "", inT = 0, outT = 0;
+  try {
+    const res = await fetch(API + "messages", { method: "POST", headers, body: JSON.stringify(body), signal });
+    if (!res.ok) { let m = ""; try { m = (await res.json()).error?.message || ""; } catch {} throw { code: httpCode(res.status, m), message: m }; }
+    const rd = res.body.getReader(), dec = new TextDecoder(); let buf = "";
+    for (;;) {
+      const { value, done } = await rd.read(); if (done) break;
+      buf += dec.decode(value, { stream: true }); let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+        if (!line.startsWith("data:")) continue;
+        let ev; try { ev = JSON.parse(line.slice(5)); } catch { continue; }
+        if (ev.type === "message_start") { const u = ev.message?.usage || {}; inT = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0); }
+        else if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta") { text += ev.delta.text; onText?.({ text }); }
+        else if (ev.type === "message_delta") { outT = ev.usage?.output_tokens || outT; if (ev.delta?.stop_reason === "refusal") throw { code: "refusal" }; }
+        else if (ev.type === "error") throw { code: ev.error?.type === "overloaded_error" ? "overloaded" : "api", message: ev.error?.message };
+      }
+    }
+    return { text, truncated: false };
+  } catch (e) {
+    if (e?.name === "AbortError") e = { code: "cancelled" };
+    else if (!e?.code) e = { code: "network" };
+    e.text = text; throw e;
+  } finally { if (inT || text) track(model, inT || Math.ceil(prompt.length / 4), outT || Math.ceil(text.length / 4)); }
+}
+function errText(e) {
+  switch (e?.code) {
+    case "no_key": return "Add your Claude API key first (API key, top left).";
+    case "auth": return "Claude didn't accept your API key. Check it under API key.";
+    case "credit": return "Your Anthropic account is out of credit. Add some at console.anthropic.com.";
+    case "cancelled": return "Stopped.";
+    case "rate_limited": return "You've hit your API rate limit. Wait a minute, then try again.";
+    case "overloaded": return "Claude is busy right now. Try again in a moment.";
+    case "prompt_too_large": return "That was too much text to send. Try a shorter file.";
+    case "refusal": return "Claude declined this one. Try the Sharper model or a different book.";
+    case "network": return "Couldn't reach Claude. Check your connection.";
+    default: return e?.message || "Something went wrong talking to Claude. Try again.";
+  }
+}
+async function saveFile(name, blob) {
+  const file = new File([blob], name, { type: blob.type });
+  if (matchMedia("(pointer: coarse)").matches && navigator.canShare?.({ files: [file] })) {
+    try { return await navigator.share({ files: [file] }); } catch (e) { if (e?.name === "AbortError") return; }
+  }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+/* ================= Local reading: the cheap part, done on your device ================= */
+const STOP = new Set("the a an and or of to in on for with is are was were be been being it its this that as at by from but not have has had he she they we you i his her their our your them him which who what when where so if then than there these those do does did can could would should will may might into out up about over after before more most such no nor only own same too very just also one all any each other some time like said say says upon its itself me my mine us very much many even still well back now how why way new get got make made see seen know known come came go went take took first two three chapter part section page book".split(" "));
+const words = s => s.toLowerCase().match(/\p{L}[\p{L}'’-]{2,}/gu) || [];
+const sentences = t => (t.replace(/\s+/g, " ").match(/[^.!?。]{25,400}[.!?。]["”’)]?/g) || []);
+function analyze(text, sections) {
+  const N = sections.length, df = new Map(), bookTf = new Map();
+  const tfs = sections.map(s => {
+    const tf = new Map();
+    for (const w of words(text.slice(s.start, s.end))) if (!STOP.has(w)) tf.set(w, (tf.get(w) || 0) + 1);
+    for (const [w, c] of tf) { df.set(w, (df.get(w) || 0) + 1); bookTf.set(w, (bookTf.get(w) || 0) + c); }
+    return tf;
+  });
+  const terms = [...bookTf].filter(([w, c]) => c > 3).map(([w, c]) => [w, c * Math.log(1 + N / (df.get(w) || 1)) * (df.get(w) > 1 ? 1 : .5)]).sort((a, b) => b[1] - a[1]).slice(0, 36).map(x => x[0]);
+  return { tfs, df, N, terms };
+}
+// Pick the most telling sentences from each section so a whole book fits in a few thousand tokens.
+function skim(text, sections, budget) {
+  const { tfs, df, N, terms } = analyze(text, sections);
+  const wts = sections.map(s => Math.sqrt(Math.max(1, s.end - s.start))), W = wts.reduce((a, b) => a + b, 0);
+  const parts = sections.map((s, i) => {
+    const share = Math.max(160, Math.floor(budget * wts[i] / W) - s.title.length - 6);
+    const sents = sentences(text.slice(s.start, Math.min(s.end, s.start + 150000)));
+    const tf = tfs[i];
+    const scored = sents.map((x, j) => {
+      const ws = [...new Set(words(x))].filter(w => !STOP.has(w));
+      let sc = 0; for (const w of ws) sc += Math.log(1 + (tf.get(w) || 0)) * Math.log(1 + N / (df.get(w) || 1));
+      return { j, x: x.trim(), sc: sc / Math.pow(Math.max(8, ws.length), .55) * (j < 3 ? 1.25 : 1) };
+    }).sort((a, b) => b.sc - a.sc);
+    const pick = []; let len = 0;
+    for (const s of scored) { if (len + s.x.length > share) continue; pick.push(s); len += s.x.length + 1; if (len > share * .92) break; }
+    pick.sort((a, b) => a.j - b.j);
+    return `## ${s.title}\n${pick.map(p => p.x).join(" ")}`;
+  });
+  return { skim: parts.join("\n"), terms };
+}
+// For one idea: find the few passages of the book that talk about it.
+function passages(rec, query, limit = 2600) {
+  if (!rec?.text) return "";
+  const q = [...new Set(words(query))].filter(w => !STOP.has(w)); if (!q.length) return "";
+  const text = rec.text, lc = rec._lc ||= text.toLowerCase(), Wn = 1100, out = [];
+  const idf = {}; for (const w of q) { let c = 0, i = lc.indexOf(w); while (i !== -1 && c < 400) { c++; i = lc.indexOf(w, i + w.length); } idf[w] = c ? Math.log(1 + 400 / c) : 0; }
+  for (let i = 0; i < text.length; i += Wn / 2) {
+    const ch = lc.slice(i, i + Wn); let sc = 0;
+    for (const w of q) { if (!idf[w]) continue; let c = 0, k = ch.indexOf(w); while (k !== -1 && c < 5) { c++; k = ch.indexOf(w, k + w.length); } if (c) sc += (1 + Math.log(c)) * idf[w]; }
+    if (sc) out.push([sc, i]);
+  }
+  out.sort((a, b) => b[0] - a[0]);
+  const picked = [];
+  for (const [, i] of out) { if (picked.some(p => Math.abs(p - i) < Wn)) continue; picked.push(i); if (picked.length * Wn >= limit) break; }
+  return picked.sort((a, b) => a - b).map(i => text.slice(i, i + Wn).replace(/\s+/g, " ").trim()).join("\n…\n");
+}
+function findSections(text, hints) {
+  let secs = [];
+  if (hints?.length >= 3) secs = hints;
+  else {
+    const re = /^[ \t]*((?:chapter|part|book|section|letter|canto|act)\s+(?:[0-9]+|[ivxlcdm]+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|[a-z]+teen|twenty[a-z-]*)\b[^\n]{0,70})$/gim;
+    let m; while ((m = re.exec(text))) secs.push({ title: m[1].trim().replace(/\s+/g, " "), start: m.index });
+    if (secs.length < 3) {
+      secs = []; const n = clamp(Math.round(text.length / 40000), 4, 14), sz = Math.ceil(text.length / n);
+      for (let i = 0; i < n; i++) secs.push({ title: `Part ${i + 1} of ${n}`, start: i * sz });
+    }
+  }
+  secs.sort((a, b) => a.start - b.start);
+  secs = secs.filter((s, i) => i === 0 || s.start - secs[i - 1].start > 300);
+  secs.forEach((s, i) => s.end = secs[i + 1]?.start ?? text.length);
+  if (secs[0] && secs[0].start > 2000) secs.unshift({ title: "Opening", start: 0, end: secs[0].start });
+  if (secs.length > 48) {
+    const g = Math.ceil(secs.length / 48), out = [];
+    for (let i = 0; i < secs.length; i += g) { const a = secs[i], b = secs[Math.min(i + g, secs.length) - 1]; out.push({ title: a === b ? a.title : `${a.title} – ${b.title}`, start: a.start, end: b.end }); }
+    secs = out;
+  }
+  return secs.map(s => ({ title: s.title.slice(0, 90), start: s.start, end: s.end }));
+}
+
+/* ================= Covers ================= */
+const coverCache = new Map();
+function hue(s) { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 360; }
+function typeCover(title, author) {
+  const key = title + "|" + author; if (coverCache.has(key)) return coverCache.get(key);
+  const c = document.createElement("canvas"); c.width = 300; c.height = 450; const x = c.getContext("2d");
+  const h = hue(title);
+  const g = x.createLinearGradient(0, 0, 300, 450); g.addColorStop(0, `hsl(${h} 38% 44%)`); g.addColorStop(1, `hsl(${(h + 40) % 360} 42% 26%)`);
+  x.fillStyle = g; x.fillRect(0, 0, 300, 450);
+  x.fillStyle = "#fff"; x.font = '500 34px "Inter Tight", Helvetica, Arial, sans-serif';
+  const ws = title.split(/\s+/); let line = "", y = 60;
+  for (const w of ws) { const t = line ? line + " " + w : w; if (x.measureText(t).width > 250 && line) { x.fillText(line, 24, y); y += 38; line = w; } else line = t; }
+  x.fillText(line, 24, y);
+  if (author) { x.font = '400 15px "Inter Tight", Helvetica, Arial, sans-serif'; x.fillText(author, 24, 420); }
+  const url = c.toDataURL("image/jpeg", .82); coverCache.set(key, url); return url;
+}
+const coverOf = m => m.cover || typeCover(m.root.text || "Untitled", m.author || "");
+async function imageToCover(src) {
+  const img = new Image(); img.src = src; await img.decode();
+  const w = 300, h = Math.round(w * img.naturalHeight / img.naturalWidth);
+  const c = document.createElement("canvas"); c.width = w; c.height = clamp(h, 200, 520);
+  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", .78);
+}
+
+/* ================= File reading ================= */
+function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = () => rej(new Error("Couldn't load the book reader. Check your connection and try again.")); document.head.appendChild(s); }); }
+async function readPDF(file, prog) {
+  if (!window.pdfjsLib) { await loadScript(PDFJS); await loadScript(PDFW); }
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFW;
+  const pdf = await window.pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false }).promise;
+  let meta = {}; try { meta = (await pdf.getMetadata()).info || {}; } catch {}
+  let cover = null;
+  try {
+    const p1 = await pdf.getPage(1), vp0 = p1.getViewport({ scale: 1 }), vp = p1.getViewport({ scale: 600 / vp0.width });
+    const c = document.createElement("canvas"); c.width = vp.width; c.height = vp.height;
+    await p1.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
+    cover = await imageToCover(c.toDataURL("image/jpeg", .9));
+  } catch {}
+  const pageStart = [], chunks = []; let len = 0;
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const p = await pdf.getPage(i), tc = await p.getTextContent();
+    const t = tc.items.map(it => it.str + (it.hasEOL ? "\n" : " ")).join("") + "\n\n";
+    pageStart.push(len); chunks.push(t); len += t.length;
+    if (i % 8 === 0 || i === pdf.numPages) prog(`Reading page ${i} of ${pdf.numPages}`);
+  }
+  let hints = [];
+  try {
+    const ol = await pdf.getOutline();
+    for (const it of ol || []) {
+      const dest = typeof it.dest === "string" ? await pdf.getDestination(it.dest) : it.dest;
+      if (!dest?.[0]) continue;
+      const idx = await pdf.getPageIndex(dest[0]);
+      hints.push({ title: it.title.trim(), start: pageStart[idx] ?? 0 });
+    }
+  } catch {}
+  return { raw: chunks.join(""), title: meta.Title, author: meta.Author, pages: pdf.numPages, cover, hints };
+}
+function joinPath(base, href) { const out = []; for (const p of (base + href).split("/")) { if (p === "..") out.pop(); else if (p !== ".") out.push(p); } return out.join("/"); }
+async function readEPUB(file, prog) {
+  if (!window.JSZip) await loadScript(JSZIP);
+  const zip = await window.JSZip.loadAsync(file);
+  const xml = s => new DOMParser().parseFromString(s, "application/xml");
+  const cont = xml(await zip.file("META-INF/container.xml").async("text"));
+  const opfPath = cont.getElementsByTagName("rootfile")[0].getAttribute("full-path");
+  const base = opfPath.includes("/") ? opfPath.slice(0, opfPath.lastIndexOf("/") + 1) : "";
+  const opf = xml(await zip.file(opfPath).async("text"));
+  const tag = n => opf.getElementsByTagNameNS("*", n)[0]?.textContent?.trim();
+  const items = [...opf.getElementsByTagNameNS("*", "item")].map(it => ({ id: it.getAttribute("id"), href: it.getAttribute("href"), type: it.getAttribute("media-type") || "", props: it.getAttribute("properties") || "" }));
+  const man = Object.fromEntries(items.map(i => [i.id, i]));
+  let cov = items.find(i => i.props.includes("cover-image"));
+  if (!cov) { const m = [...opf.getElementsByTagNameNS("*", "meta")].find(m => m.getAttribute("name") === "cover"); cov = m && man[m.getAttribute("content")]; }
+  if (!cov) cov = items.find(i => i.type.startsWith("image/") && /cover/i.test(i.id + i.href));
+  let cover = null;
+  if (cov) try {
+    const blob = await zip.file(joinPath(base, decodeURIComponent(cov.href))).async("blob");
+    const url = URL.createObjectURL(new Blob([blob], { type: cov.type || "image/jpeg" }));
+    cover = await imageToCover(url); URL.revokeObjectURL(url);
+  } catch {}
+  const spine = [...opf.getElementsByTagNameNS("*", "itemref")].map(r => man[r.getAttribute("idref")]).filter(Boolean);
+  const out = [], hints = []; let len = 0;
+  for (let i = 0; i < spine.length; i++) {
+    const f = zip.file(joinPath(base, decodeURIComponent(spine[i].href.split("#")[0]))); if (!f) continue;
+    const html = (await f.async("text")).replace(/<\/(p|div|h[1-6]|li|tr|blockquote|section)>|<br\s*\/?>/gi, "$&\n");
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const t = (doc.body?.textContent || "").replace(/[ \t ]+/g, " ").replace(/\n\s*\n\s*/g, "\n\n").trim();
+    if (t.length < 150) continue;
+    const head = doc.querySelector("h1,h2,h3")?.textContent?.replace(/\s+/g, " ").trim();
+    hints.push({ title: head && head.length < 90 ? head : `Section ${hints.length + 1}`, start: len });
+    out.push(t); len += t.length + 2;
+    prog(`Reading section ${i + 1} of ${spine.length}`);
+  }
+  return { raw: out.join("\n\n"), title: tag("title"), author: tag("creator"), cover, hints };
+}
+const titleFromName = n => n.replace(/\.[^.]+$/, "").replace(/[_]+/g, " ").replace(/\s+/g, " ").trim();
+
+/* ================= Theme ================= */
+let T = {}, themeVer = 0;
+function readTheme() {
+  const cs = getComputedStyle(document.documentElement), g = n => cs.getPropertyValue(n).trim();
+  T = { bg: g("--bg"), ink: g("--ink"), ink2: g("--ink-2"), ink3: g("--ink-3"), hl: g("--hl"), solid: g("--solid") };
+  T.edge2 = mix(T.ink, T.bg, .3); T.edge3 = mix(T.ink, T.bg, .5);
+  themeVer++;
+}
+const hex = h => { h = h.replace("#", ""); return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)); };
+function mix(a, b, t) { try { const A = hex(a), B = hex(b); return "#" + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, "0")).join(""); } catch { return a; } }
+
+/* ================= Measure & layout ================= */
+const FB = '"Inter Tight", "Helvetica Neue", Helvetica, Arial, sans-serif';
+const STYLE = [
+  { kind: "root", size: 24, weight: 500, lh: 28, max: 280, px: 6, py: 6, pre: 0 },
+  { kind: "line", size: 14.5, weight: 500, lh: 18, max: 190, px: 3, py: 4, pre: 21 },
+  { kind: "line", size: 13, weight: 400, lh: 16.5, max: 210, px: 3, py: 3, pre: 0 },
+  { kind: "line", size: 12, weight: 400, lh: 15, max: 210, px: 3, py: 3, pre: 0 }
+];
+const st = d => STYLE[Math.min(d, 3)];
+const mctx = document.createElement("canvas").getContext("2d");
+const mcache = new Map();
+function measure(text, d) {
+  const s = st(d), key = Math.min(d, 3) + "|" + text;
+  if (mcache.has(key)) return mcache.get(key);
+  mctx.font = `${s.weight} ${s.size}px ${FB}`;
+  const lines = []; let cur = "";
+  for (const w of text.split(/\s+/).filter(Boolean)) { const t = cur ? cur + " " + w : w; if (cur && mctx.measureText(t).width > s.max) { lines.push(cur); cur = w; } else cur = t; }
+  if (cur || !lines.length) lines.push(cur);
+  const w = Math.max(d === 0 ? 60 : 20, ...lines.map(l => mctx.measureText(l).width));
+  const r = { lines, w: Math.ceil(w) + s.px * 2 + s.pre, h: lines.length * s.lh + s.py * 2, s };
+  mcache.set(key, r); return r;
+}
+let map = null, sel = null, byId = new Map(), parentOf = new Map(), visible = [];
+const V = new Map(); let revealNext = false;
+function index() {
+  byId = new Map(); parentOf = new Map();
+  (function walk(n, p) { byId.set(n.id, n); if (p) parentOf.set(n.id, p); n.children ||= []; n.children.forEach(c => walk(c, n)); })(map.root, null);
+}
+const depthOf = n => { let d = 0, p = parentOf.get(n.id); while (p) { d++; p = parentOf.get(p.id); } return d; };
+const countAll = n => 1 + n.children.reduce((a, c) => a + countAll(c), 0);
+function computeLayout() {
+  const R = map.root; visible = [];
+  const H = d => (d === 1 ? 64 : 34), G = d => (d === 1 ? 26 : d === 2 ? 9 : 5);
+  const meas = (n, d) => { const m = measure(n.text || " ", d); n._w = m.w; n._h = m.h; n._d = d; };
+  const sub = (n, d) => { meas(n, d); n._kids = n.collapsed ? [] : n.children; let t = 0; n._kids.forEach((c, i) => { t += sub(c, d + 1) + (i ? G(d + 1) : 0); }); return (n._sh = Math.max(n._h, t)); };
+  meas(R, 0); R._x = R.dx || 0; R._y = R.dy || 0; R._dir = 1; R._kind = "root"; visible.push(R);
+  const kids = R.collapsed ? [] : R.children; kids.forEach(c => sub(c, 1));
+  const total = kids.reduce((a, c) => a + c._sh, 0), right = [], left = []; let acc = 0;
+  kids.forEach((c, i) => { c._num = i + 1; if (!right.length || (acc + c._sh / 2 <= total / 2 && !left.length)) { right.push(c); acc += c._sh; } else left.push(c); });
+  left.reverse();
+  const place = (list, dir, p, d) => {
+    if (!list.length) return;
+    const tot = list.reduce((a, c) => a + c._sh, 0) + G(d) * (list.length - 1);
+    let y = p._y - tot / 2; const edge = p._x + dir * (p._w / 2 + (d === 1 ? 6 : 0));
+    for (const c of list) {
+      c._dir = dir; c._kind = "line";
+      c._x = edge + dir * (H(d) + c._w / 2) + (c.dx || 0); c._y = y + c._sh / 2 + (c.dy || 0);
+      y += c._sh + G(d); visible.push(c); place(c._kids, dir, c, d + 1);
+    }
+  };
+  place(right, 1, R, 1); place(left, -1, R, 1);
+}
+function layout(opts = {}) {
+  index(); computeLayout();
+  const now = performance.now(), seen = new Set(), reveal = revealNext; revealNext = false;
+  visible.forEach((n, i) => {
+    seen.add(n.id); const p = parentOf.get(n.id); let v = V.get(n.id);
+    if (!v) {
+      const pv = p && V.get(p.id);
+      v = { x: pv ? pv.x : n._x, y: pv ? pv.y : n._y, vx: 0, vy: 0, o: 0, start: reveal ? now + n._d * 150 + i * 8 : now, sig: "" };
+      v.el = document.createElementNS(NS, "g"); v.el.setAttribute("class", "n"); v.el.dataset.id = n.id; $("#nodes").appendChild(v.el);
+      if (p) { v.edge = document.createElementNS(NS, "path"); v.edge.setAttribute("fill", "none"); $("#edges").appendChild(v.edge); }
+      V.set(n.id, v);
+    }
+    Object.assign(v, { n, tx: n._x, ty: n._y, to: 1, dying: false, pid: p?.id, w: n._w, h: n._h, dir: n._dir, kind: n._kind, d: n._d, num: n._num });
+    if (opts.snap) { v.x = v.tx; v.y = v.ty; }
+  });
+  for (const [id, v] of V) if (!seen.has(id) && !v.dying) {
+    v.dying = true; v.to = 0;
+    let a = parentOf.get(id); while (a && !seen.has(a.id)) a = parentOf.get(a.id);
+    const av = a && V.get(a.id); if (av) { v.tx = av.tx; v.ty = av.ty; }
+  }
+  for (const v of V.values()) if (!v.dying) buildNode(v);
+  kick();
+}
+
+/* ================= Render ================= */
+const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent && parent.appendChild(e); return e; };
+function buildNode(v) {
+  const n = v.n, selected = sel === n.id;
+  const sig = [n.text, v.d, v.dir, v.num, n.collapsed ? 1 : 0, n.children.length, selected ? 1 : 0, themeVer].join("|");
+  if (sig === v.sig) return; v.sig = sig;
+  const m = measure(n.text || " ", v.d), s = m.s, g = v.el, w = v.w, h = v.h;
+  g.textContent = "";
+  mk("rect", { class: "hl", x: -6, y: -4, width: w + 12, height: h + 8, fill: T.hl, opacity: selected ? 1 : 0 }, g);
+  const ink = v.d >= 3 ? T.ink2 : T.ink;
+  if (v.kind !== "root") mk("path", { d: `M0 ${h}H${w}`, stroke: v.d === 1 ? T.ink : v.d === 2 ? T.edge2 : T.edge3, "stroke-width": selected ? 1.6 : 1, fill: "none" }, g);
+  if (v.d === 1) { const t = mk("text", { x: s.px, y: s.py + 8, "font-family": FB, "font-size": 9, fill: T.ink2 }, g); t.textContent = pad2(v.num || 0); }
+  const anchor = v.kind === "root" ? "middle" : v.d === 1 || v.dir > 0 ? "start" : "end";
+  const tx = v.kind === "root" ? w / 2 : v.d === 1 ? s.px + s.pre : v.dir > 0 ? s.px : w - s.px;
+  m.lines.forEach((l, i) => {
+    const t = mk("text", { x: tx, y: s.py + i * s.lh + s.lh * .76, "text-anchor": anchor, "font-family": FB, "font-size": s.size, "font-weight": s.weight, fill: ink, "letter-spacing": v.d === 0 ? "-0.3" : "0" }, g);
+    t.textContent = l || " ";
+    if (!n.text && v.kind !== "root") { t.textContent = "New idea"; t.setAttribute("fill", T.ink3); }
+  });
+  if (n.collapsed && n.children.length) {
+    const b = mk("g", { class: "badge" }, g), right = v.dir > 0 || v.kind === "root";
+    mk("rect", { x: right ? w : -34, y: 0, width: 34, height: h + 4, fill: "transparent" }, b);
+    const t = mk("text", { x: right ? w + 7 : -7, y: h - 3, "text-anchor": right ? "start" : "end", "font-family": FB, "font-size": 11, fill: T.ink2 }, b);
+    t.textContent = "+" + (countAll(n) - 1);
+  }
+  if (v.edge) { v.edge.setAttribute("stroke", v.d === 1 ? T.ink : v.d === 2 ? T.edge2 : T.edge3); v.edge.setAttribute("stroke-width", v.d === 1 ? 1.1 : .9); }
+}
+const outAnchor = (p, dir) => p.kind === "root" ? [p.x + dir * (p.w / 2 + 6), p.y] : [p.x + dir * p.w / 2, p.y + p.h / 2];
+const inAnchor = v => [v.x - v.dir * v.w / 2, v.y + v.h / 2];
+function draw() {
+  for (const v of V.values()) {
+    v.el.setAttribute("transform", `translate(${(v.x - v.w / 2).toFixed(1)},${(v.y - v.h / 2).toFixed(1)})`);
+    v.el.setAttribute("opacity", v.o.toFixed(3));
+    if (!v.edge) continue;
+    const p = V.get(v.pid); if (!p) continue;
+    const [x1, y1] = outAnchor(p, v.dir), [x2, y2] = inAnchor(v), dx = Math.abs(x2 - x1) * .55;
+    v.edge.setAttribute("d", `M${x1.toFixed(1)} ${y1.toFixed(1)}C${(x1 + v.dir * dx).toFixed(1)} ${y1.toFixed(1)} ${(x2 - v.dir * dx).toFixed(1)} ${y2.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`);
+    v.edge.setAttribute("opacity", Math.min(v.o, p.o).toFixed(3));
+  }
+}
+
+/* ================= Motion & camera ================= */
+const stage = $("#stage"), svg = $("#canvas"), world = $("#world");
+let cam = { x: 0, y: 0, k: 1 }, camT = null, inertia = null, raf = 0;
+const applyCam = () => world.setAttribute("transform", `translate(${cam.x.toFixed(2)},${cam.y.toFixed(2)}) scale(${cam.k.toFixed(4)})`);
+function kick() { if (!raf) raf = requestAnimationFrame(tick); }
+function tick(t) {
+  raf = 0; let moving = false;
+  for (const [id, v] of V) {
+    if (t < v.start) { moving = true; continue; }
+    if (reduced || v.pin) { v.x = v.tx; v.y = v.ty; v.vx = v.vy = 0; v.o = v.to; }
+    else {
+      v.vx = (v.vx + (v.tx - v.x) * .15) * .74; v.vy = (v.vy + (v.ty - v.y) * .15) * .74;
+      v.x += v.vx; v.y += v.vy; v.o += (v.to - v.o) * .18;
+      if (Math.abs(v.tx - v.x) > .15 || Math.abs(v.ty - v.y) > .15 || Math.abs(v.vx) + Math.abs(v.vy) > .05 || Math.abs(v.to - v.o) > .01) moving = true;
+      else { v.x = v.tx; v.y = v.ty; v.o = v.to; }
+    }
+    if (v.dying && v.o < .03) { v.el.remove(); v.edge?.remove(); V.delete(id); }
+  }
+  if (camT) {
+    const f = reduced ? 1 : .15;
+    cam.x += (camT.x - cam.x) * f; cam.y += (camT.y - cam.y) * f; cam.k += (camT.k - cam.k) * f;
+    if (Math.abs(camT.x - cam.x) < .3 && Math.abs(camT.y - cam.y) < .3 && Math.abs(camT.k - cam.k) < .001) { cam = { ...camT }; camT = null; } else moving = true;
+    applyCam();
+  } else if (inertia) {
+    cam.x += inertia.x; cam.y += inertia.y; inertia.x *= .92; inertia.y *= .92;
+    if (Math.abs(inertia.x) + Math.abs(inertia.y) < .2) inertia = null; else moving = true;
+    applyCam();
+  }
+  draw(); if (moving) kick();
+}
+function viewport() {
+  const W = innerWidth, Hh = innerHeight;
+  let top;
+  if (phone()) top = $(".cm").getBoundingClientRect().bottom + 8;
+  else top = Math.min(Hh * .42, Math.max(...[".c1", ".c2", ".c3"].map(s => $(s).getBoundingClientRect().bottom)) + 16);
+  const bottom = phone() && $("#panel").classList.contains("open") ? $("#panel").getBoundingClientRect().height : 36;
+  return { w: W, h: Hh - top - bottom, top };
+}
+function fit(instant) {
+  if (!visible.length) return;
+  let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity;
+  for (const n of visible) { a = Math.min(a, n._x - n._w / 2); c = Math.max(c, n._x + n._w / 2 + 30); b = Math.min(b, n._y - n._h / 2); d = Math.max(d, n._y + n._h / 2); }
+  a -= 30;
+  const vp = viewport(), padX = phone() ? 14 : 40;
+  const k = clamp(Math.min((vp.w - padX * 2) / (c - a), (vp.h - 20) / (d - b)), phone() ? .32 : .25, 1.2);
+  const t = { k, x: vp.w / 2 - ((a + c) / 2) * k, y: vp.top + vp.h / 2 - ((b + d) / 2) * k };
+  inertia = null;
+  if (instant) { cam = t; camT = null; applyCam(); } else { camT = t; kick(); }
+}
+function zoomAt(sx, sy, f, smooth) {
+  const base = camT || cam, k = clamp(base.k * f, .2, 2.8), wx = (sx - base.x) / base.k, wy = (sy - base.y) / base.k;
+  const t = { k, x: sx - wx * k, y: sy - wy * k }; inertia = null;
+  if (smooth) { camT = t; kick(); } else { cam = t; camT = null; applyCam(); }
+}
+function ensureVisible(n) {
+  const vp = viewport(), k = (camT || cam).k, base = camT || cam;
+  const sx = base.x + n._x * k, sy = base.y + n._y * k, hw = n._w * k / 2, m = 30;
+  let dx = 0, dy = 0;
+  if (sx - hw < m) dx = m - (sx - hw); else if (sx + hw > vp.w - m) dx = vp.w - m - (sx + hw);
+  if (sy < vp.top + m) dy = vp.top + m - sy; else if (sy > vp.top + vp.h - m) dy = vp.top + vp.h - m - sy;
+  if (dx || dy) { camT = { k, x: base.x + dx, y: base.y + dy }; kick(); }
+}
+
+/* ================= Editing ================= */
+let undo = [], redo = [], saveT = 0;
+const snap = () => JSON.stringify(map.root, strip);
+function pushUndo() { undo.push(snap()); if (undo.length > 100) undo.shift(); redo = []; }
+function changed() { map.updated = Date.now(); clearTimeout(saveT); const m = map; saveT = setTimeout(() => store.put(m), 600); renderHeader(); renderLibrary(); }
+function restore(json) { map.root = JSON.parse(json); index(); if (sel && !byId.has(sel)) sel = null; layout(); renderPanel(); changed(); }
+function doUndo() { if (!map) return; if (!undo.length) return toast("Nothing to undo"); redo.push(snap()); restore(undo.pop()); }
+function doRedo() { if (!map || !redo.length) return; undo.push(snap()); restore(redo.pop()); }
+function select(id, opts = {}) { sel = id; layout(); renderPanel(); const n = id && byId.get(id); if (n && !opts.noScroll) setTimeout(() => ensureVisible(n), phone() ? 320 : 0); }
+function addChild(n) { pushUndo(); const c = { id: newId(), text: "", children: [] }; n.collapsed = false; n.children.push(c); sel = c.id; layout(); renderPanel(); changed(); setTimeout(() => startEdit(c, true), 60); }
+function addSibling(n) {
+  const p = parentOf.get(n.id); if (!p) return addChild(n);
+  pushUndo(); const c = { id: newId(), text: "", children: [] }; p.children.splice(p.children.indexOf(n) + 1, 0, c);
+  sel = c.id; layout(); renderPanel(); changed(); setTimeout(() => startEdit(c, true), 60);
+}
+function removeNode(n, noUndo) {
+  const p = parentOf.get(n.id); if (!p) return toast("The center of the map can't be deleted");
+  if (!noUndo) pushUndo();
+  const i = p.children.indexOf(n); p.children.splice(i, 1);
+  sel = noUndo ? null : (p.children[i] || p.children[i - 1] || p).id;
+  layout(); renderPanel(); changed();
+}
+function toggle(n) { if (!n.children.length) return; pushUndo(); n.collapsed = !n.collapsed; layout(); renderPanel(); changed(); }
+function setLevel(L) {
+  if (!map) return; pushUndo();
+  (function walk(n, d) { if (n.children.length) n.collapsed = d >= L && d > 0; n.children.forEach(c => walk(c, d + 1)); })(map.root, 0);
+  index(); computeLayout(); if (sel && !visible.some(n => n.id === sel)) sel = null;
+  layout(); renderPanel(); changed(); setTimeout(() => fit(), 60);
+}
+const editor = $("#editor"); let editing = null;
+function startEdit(n, isNew) {
+  if (!V.get(n.id)) return; ensureVisible(n);
+  setTimeout(() => {
+    const v = V.get(n.id); if (!v) return;
+    const s = st(n._d), k = cam.k, w = Math.max(n._w, 150) * k + 16, x = cam.x + n._x * k - w / 2;
+    editing = { n, isNew };
+    Object.assign(editor.style, { left: clamp(x, 8, innerWidth - w - 8) + "px", top: (cam.y + (n._y - n._h / 2) * k - 4) + "px", width: w + "px", fontSize: Math.max(s.size * k, phone() ? 16 : 11) + "px", fontWeight: s.weight });
+    editor.value = n.text; editor.hidden = false; v.el.classList.add("editing");
+    autosize(); editor.focus({ preventScroll: true }); editor.select();
+  }, camT ? 240 : 0);
+}
+function autosize() { editor.style.height = "auto"; editor.style.height = editor.scrollHeight + 2 + "px"; }
+function endEdit(commit) {
+  if (!editing) return;
+  const { n, isNew } = editing; editing = null; editor.hidden = true; V.get(n.id)?.el.classList.remove("editing");
+  const text = editor.value.replace(/\s+/g, " ").trim();
+  if (commit && text && text !== n.text) { if (!isNew) pushUndo(); n.text = text; }
+  else if (isNew && !n.text) { undo.pop(); removeNode(n, true); return; }
+  layout(); renderPanel(); changed();
+}
+editor.addEventListener("input", autosize);
+editor.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); endEdit(true); }
+  else if (e.key === "Escape") { e.preventDefault(); endEdit(false); }
+  else if (e.key === "Tab") { e.preventDefault(); const n = editing.n; endEdit(true); if (byId.has(n.id)) addChild(n); }
+});
+editor.addEventListener("blur", () => endEdit(true));
+
+/* ================= Pointer ================= */
+const pts = new Map(); let gesture = null, lastTap = { id: null, t: 0 }, pressT = 0;
+const local = e => [e.clientX, e.clientY];
+svg.addEventListener("pointerdown", e => {
+  if (editing) endEdit(true);
+  svg.setPointerCapture(e.pointerId);
+  const [x, y] = local(e); pts.set(e.pointerId, { x, y }); inertia = null; camT = null; clearTimeout(pressT);
+  if (pts.size === 2) { const [a, b] = [...pts.values()]; gesture = { type: "pinch", d: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 }; return; }
+  const g = e.target.closest?.(".n");
+  if (g) {
+    const n = byId.get(g.dataset.id);
+    gesture = { type: "node", n, sx: x, sy: y, dx: n.dx || 0, dy: n.dy || 0, moved: false, badge: !!e.target.closest(".badge") };
+    if (e.pointerType === "touch") pressT = setTimeout(() => { if (gesture?.n === n && !gesture.moved) { gesture = null; pts.clear(); navigator.vibrate?.(8); startEdit(n, false); } }, 520);
+  } else gesture = { type: "pan", lx: x, ly: y, lt: performance.now(), vx: 0, vy: 0, sx: x, sy: y };
+});
+svg.addEventListener("pointermove", e => {
+  if (!pts.has(e.pointerId) || !gesture) return;
+  const [x, y] = local(e); pts.set(e.pointerId, { x, y });
+  if (gesture.type === "pinch" && pts.size === 2) {
+    const [a, b] = [...pts.values()], d = Math.hypot(a.x - b.x, a.y - b.y), cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+    cam.x += cx - gesture.cx; cam.y += cy - gesture.cy; zoomAt(cx, cy, d / gesture.d);
+    Object.assign(gesture, { d, cx, cy });
+  } else if (gesture.type === "pan") {
+    const now = performance.now(), dt = Math.max(1, now - gesture.lt);
+    cam.x += x - gesture.lx; cam.y += y - gesture.ly;
+    gesture.vx = (x - gesture.lx) / dt * 16; gesture.vy = (y - gesture.ly) / dt * 16;
+    Object.assign(gesture, { lx: x, ly: y, lt: now }); svg.classList.add("panning"); applyCam();
+  } else if (gesture.type === "node") {
+    const g = gesture;
+    if (!g.moved && Math.hypot(x - g.sx, y - g.sy) > 6) {
+      clearTimeout(pressT);
+      if (g.n === map.root) { gesture = { type: "pan", lx: x, ly: y, lt: performance.now(), vx: 0, vy: 0 }; return; }
+      g.moved = true; pushUndo(); const v = V.get(g.n.id); if (v) v.pin = true;
+    }
+    if (g.moved) { g.n.dx = g.dx + (x - g.sx) / cam.k; g.n.dy = g.dy + (y - g.sy) / cam.k; layout(); }
+  }
+});
+function endPointer(e) {
+  if (!pts.has(e.pointerId)) return;
+  pts.delete(e.pointerId); clearTimeout(pressT);
+  const g = gesture;
+  if (pts.size === 1 && g?.type === "pinch") { const [p] = pts.values(); gesture = { type: "pan", lx: p.x, ly: p.y, lt: performance.now(), vx: 0, vy: 0 }; return; }
+  if (pts.size) return;
+  gesture = null; svg.classList.remove("panning");
+  if (!g) return;
+  if (g.type === "pan") {
+    if (performance.now() - g.lt < 60 && Math.hypot(g.vx, g.vy) > 1.5) { inertia = { x: g.vx, y: g.vy }; kick(); }
+    if (g.sx !== undefined && Math.hypot(g.lx - g.sx, g.ly - g.sy) < 4 && sel) select(null);
+  } else if (g.type === "node") {
+    const v = V.get(g.n.id); if (v) v.pin = false;
+    if (g.moved) { changed(); return; }
+    if (g.badge) { toggle(g.n); return; }
+    const now = performance.now();
+    if (lastTap.id === g.n.id && now - lastTap.t < 380) { lastTap = { id: null, t: 0 }; startEdit(g.n, false); return; }
+    lastTap = { id: g.n.id, t: now }; select(g.n.id, { noScroll: !phone() });
+  }
+}
+svg.addEventListener("pointerup", endPointer);
+svg.addEventListener("pointercancel", endPointer);
+svg.addEventListener("wheel", e => {
+  e.preventDefault();
+  const [x, y] = local(e);
+  const wheel = e.deltaMode === 1 || (e.deltaX === 0 && Number.isInteger(e.deltaY) && Math.abs(e.deltaY) >= 50);
+  if (e.ctrlKey || e.metaKey || wheel) zoomAt(x, y, Math.exp(-e.deltaY * (e.ctrlKey ? .01 : .0022)));
+  else { cam.x -= e.deltaX; cam.y -= e.deltaY; camT = null; inertia = null; applyCam(); }
+}, { passive: false });
+// iOS: pinching anywhere zooms the map, never the page
+for (const t of ["gesturestart", "gesturechange", "gestureend"]) document.addEventListener(t, e => e.preventDefault(), { passive: false });
+document.addEventListener("touchmove", e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+document.addEventListener("dblclick", e => { if (!e.target.closest("input, textarea")) e.preventDefault(); }, { passive: false });
+document.addEventListener("focusout", () => setTimeout(() => { if (!document.activeElement?.matches?.("input, textarea")) scrollTo(0, 0); }, 50));
+
+/* ================= Keyboard ================= */
+document.addEventListener("keydown", e => {
+  const tag = e.target.tagName;
+  if (!$("#scrim").hidden) { if (e.key === "Escape") closeImport(); return; }
+  if (tag === "INPUT" || tag === "TEXTAREA" || editing) return;
+  if (tag === "BUTTON" && (e.key === " " || e.key === "Enter")) return;
+  const mod = e.metaKey || e.ctrlKey;
+  if (mod && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? doRedo() : doUndo(); return; }
+  if (mod && e.key.toLowerCase() === "y") { e.preventDefault(); doRedo(); return; }
+  if (!map || mod) return;
+  const n = sel && byId.get(sel), vp = viewport();
+  if (e.key === "0") return fit();
+  if (e.key === "=" || e.key === "+") return zoomAt(vp.w / 2, vp.top + vp.h / 2, 1.25, true);
+  if (e.key === "-") return zoomAt(vp.w / 2, vp.top + vp.h / 2, .8, true);
+  if (!n) { if (["Tab", "Enter", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) { e.preventDefault(); select(map.root.id); } return; }
+  if (e.key === "Tab") { e.preventDefault(); addChild(n); }
+  else if (e.key === "Enter") { e.preventDefault(); addSibling(n); }
+  else if (e.key === "F2" || e.key.toLowerCase() === "e") { e.preventDefault(); startEdit(n, false); }
+  else if (e.key === "Backspace" || e.key === "Delete") { e.preventDefault(); removeNode(n); }
+  else if (e.key === " ") { e.preventDefault(); toggle(n); }
+  else if (e.key === "Escape") select(null);
+  else if (e.key.startsWith("Arrow")) { e.preventDefault(); navigate(n, e.key); }
+});
+function navigate(n, key) {
+  const p = parentOf.get(n.id), kids = n.collapsed ? [] : n.children;
+  if (key === "ArrowRight" || key === "ArrowLeft") {
+    const dir = key === "ArrowRight" ? 1 : -1;
+    if (n === map.root) { const c = kids.filter(c => c._dir === dir); if (c.length) select(c[0].id); return; }
+    if (n._dir === dir) { if (kids.length) select(kids[Math.floor((kids.length - 1) / 2)].id); else if (n.collapsed) toggle(n); }
+    else if (p) select(p.id);
+    return;
+  }
+  const up = key === "ArrowUp";
+  const c = visible.filter(m => m !== n && m._d === n._d && m._dir === n._dir && (up ? m._y < n._y : m._y > n._y)).sort((a, b) => Math.abs(a._y - n._y) - Math.abs(b._y - n._y));
+  if (c[0]) select(c[0].id);
+}
+
+/* ================= Columns ================= */
+const FOCUS = {
+  ideas: { label: "Key ideas", instr: "the key ideas, arguments and concepts, grouped by theme rather than by chapter" },
+  chapters: { label: "Chapter by chapter", instr: "the book's own structure: one branch per part or chapter (merge short ones), each with its key points" },
+  story: { label: "Characters & story", instr: "characters and relationships, plot arcs, settings, themes and symbols" },
+  study: { label: "Study guide", instr: "a study guide: core concepts with definitions, examples and evidence, plus a branch of review questions" }
+};
+const SIZE = {
+  overview: { label: "Overview", lines: 40, skim: 14000, instr: "5 to 7 branches, 3 to 5 ideas each, a few details (about 40 lines)" },
+  detailed: { label: "Detailed", lines: 100, skim: 26000, instr: "6 to 9 branches, 3 to 6 ideas each, most ideas with 2 or 3 details (about 100 lines)" }
+};
+const fmtDate = t => new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+function renderHeader() {
+  if (!map) { $("#mapTitle").textContent = "No map open"; $("#mapMeta").textContent = ""; $("#mTitle").textContent = "No map open"; $("#mMeta").textContent = ""; renderTicker(); return; }
+  const title = map.root.text || "Untitled", meta = [map.author, `${countAll(map.root) - 1} ideas`, FOCUS[map.focus]?.label, map.example && "Example"].filter(Boolean);
+  $("#mapTitle").textContent = title; $("#mapMeta").textContent = meta.join(", ");
+  $("#mTitle").textContent = title; $("#mMeta").textContent = meta.join(", ");
+  renderTicker();
+}
+let tickerSig = "";
+function renderTicker() {
+  const items = map ? map.root.children : [];
+  const sig = items.map(c => c.id + c.text).join("|"); if (sig === tickerSig) return; tickerSig = sig;
+  const track = $("#track");
+  if (!items.length) { track.innerHTML = ""; return; }
+  const one = items.map((c, i) => `<button type="button" data-branch="${c.id}"><sup>${i + 1}</sup>${esc(c.text)}${c.note ? ` <span class="dim">${esc(c.note)}</span>` : ""}</button>`).join("");
+  track.innerHTML = one + one;
+  track.style.setProperty("--dur", Math.max(40, items.length * 12) + "s");
+}
+$("#track").addEventListener("click", e => { const b = e.target.closest("[data-branch]"); if (!b || !map) return; const n = byId.get(b.dataset.branch); if (n) { if (!visible.includes(n)) layout(); select(n.id, { noScroll: false }); } });
+const reveal = $("#reveal"), revealImg = $("#revealImg");
+const canHover = matchMedia("(hover: hover)").matches;
+function renderLibrary() {
+  const lib = $("#lib"), list = Object.values(maps).sort((a, b) => (a.created || 0) - (b.created || 0));
+  lib.innerHTML = list.length ? "" : `<li class="dim" style="display:block">No books yet.</li>`;
+  list.forEach((m, i) => {
+    const li = document.createElement("li"); if (map && m.id === map.id) li.className = "on";
+    li.innerHTML = `<span class="no">${map && m.id === map.id ? "↗" : pad2(i + 1)}</span><img class="thumb" alt="" src="${coverOf(m)}"><button class="open" type="button">${esc(m.root.text || "Untitled")}${m.author ? ` (${esc(m.author)})` : ""}${m.example ? " — example" : ""}</button><button class="x" type="button" aria-label="Delete ${esc(m.root.text)}">×</button>`;
+    li.querySelector(".open").onclick = () => { openMap(m.id); $("#books").classList.remove("open"); };
+    if (canHover) {
+      li.querySelector(".open").addEventListener("mouseenter", () => { revealImg.src = coverOf(m); requestAnimationFrame(() => reveal.classList.add("on")); });
+      li.querySelector(".open").addEventListener("mouseleave", () => reveal.classList.remove("on"));
+    }
+    const x = li.querySelector(".x");
+    x.onclick = () => {
+      if (!x.classList.contains("confirm")) { x.classList.add("confirm"); x.textContent = "delete?"; setTimeout(() => { if (x.isConnected) { x.classList.remove("confirm"); x.textContent = "×"; } }, 3000); return; }
+      delete maps[m.id]; store.del(m.id); books.del(m.id);
+      if (map && map.id === m.id) { map = null; openMap(pickFirst()); }
+      renderLibrary(); toast("Deleted");
+    };
+    lib.appendChild(li);
+  });
+}
+const pathOf = n => { const out = [n]; let p = parentOf.get(n.id); while (p) { out.unshift(p); p = parentOf.get(p.id); } return out; };
+let aiBusy = null, aiCtl = null;
+function renderPanel() {
+  const P = $("#panel");
+  const n = map && sel && byId.get(sel);
+  P.classList.toggle("open", !!n);
+  $("#ticker").classList.toggle("hide", !!n);
+  if (!map) { P.innerHTML = ""; return; }
+  if (!n) {
+    P.innerHTML = `<div><span class="h">Selected</span><span class="dim">Nothing yet. Click an idea to read its note.</span></div>
+      ${map.root.note ? `<p>${esc(map.root.note)}</p>` : ""}
+      <div class="keys"><span>Click</span><span>Read an idea</span><span>Double-click</span><span>Rename</span><span>Drag</span><span>Move a branch</span><span>Tab</span><span>Add an idea under it</span><span>Enter</span><span>Add a sibling</span><span>Space</span><span>Fold a branch</span><span>⌘Z</span><span>Undo</span></div>`;
+    return;
+  }
+  const d = n === map.root ? 0 : n._d ?? depthOf(n);
+  const kind = d === 0 ? "The book" : d === 1 ? `Branch ${pad2(n._num || 0)}` : d === 2 ? "Idea" : "Detail";
+  const path = pathOf(n).slice(0, -1), busy = aiBusy?.id === n.id;
+  P.innerHTML = `
+    <span class="grab" style="display:none"></span>
+    <div style="display:flex;justify-content:space-between;gap:12px"><span class="h">${kind}${n.children.length ? `, ${countAll(n) - 1} below` : ""}</span><button class="ln sheetclose" type="button" id="pClose">Close</button></div>
+    ${path.length ? `<div class="crumbs">${path.map(p => `<button type="button" data-go="${p.id}">${esc(p.text || "New idea")}</button>`).join(" / ")}</div>` : ""}
+    <div><textarea class="t" id="pText" rows="1" aria-label="Idea">${esc(n.text)}</textarea>
+    <textarea class="no" id="pNote" placeholder="Add a note" aria-label="Note">${esc(n.note || "")}</textarea>
+    ${n.ref ? `<span class="dim">${esc(n.ref)}</span>` : ""}</div>
+    <div class="links">
+      <button class="ln" type="button" id="pGrow" ${aiBusy ? "disabled" : ""}>${busy && aiBusy.kind === "grow" ? "Growing…" : "Grow ideas ↗"}</button>
+      <button class="ln" type="button" id="pExplain" ${aiBusy ? "disabled" : ""}>${busy && aiBusy.kind === "explain" ? "Writing…" : "Explain"}</button>
+      ${aiBusy ? `<button class="ln" type="button" id="pStop">Stop</button>` : ""}
+    </div>
+    <div class="err" id="pErr" hidden></div>
+    <div class="links">
+      <button class="ln" type="button" id="pAdd">Add idea</button>
+      ${n.children.length ? `<button class="ln" type="button" id="pFold">${n.collapsed ? "Unfold" : "Fold"}</button>` : ""}
+      ${d > 0 ? `<button class="ln" type="button" id="pDel">Delete</button>` : ""}
+      ${(n.dx || n.dy) ? `<button class="ln" type="button" id="pReset">Snap back</button>` : ""}
+    </div>`;
+  P.querySelectorAll("[data-go]").forEach(b => b.onclick = () => select(b.dataset.go));
+  let undoTaken = false;
+  const t = P.querySelector("#pText"), no = P.querySelector("#pNote");
+  t.onfocus = no.onfocus = () => { undoTaken = false; };
+  t.oninput = () => { if (!undoTaken) { pushUndo(); undoTaken = true; } n.text = t.value.replace(/\n/g, " "); layout(); changed(); };
+  t.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); t.blur(); } };
+  no.oninput = () => { if (!undoTaken) { pushUndo(); undoTaken = true; } n.note = no.value; changed(); };
+  P.querySelector("#pClose").onclick = () => select(null);
+  P.querySelector("#pAdd").onclick = () => addChild(n);
+  P.querySelector("#pFold")?.addEventListener("click", () => toggle(n));
+  P.querySelector("#pDel")?.addEventListener("click", () => removeNode(n));
+  P.querySelector("#pReset")?.addEventListener("click", () => { pushUndo(); n.dx = n.dy = 0; layout(); renderPanel(); changed(); });
+  P.querySelector("#pGrow").onclick = () => grow(n);
+  P.querySelector("#pExplain").onclick = () => explain(n);
+  P.querySelector("#pStop")?.addEventListener("click", () => aiCtl?.abort());
+}
+const panelErr = msg => { const e = $("#pErr"); if (e) { e.textContent = msg; e.hidden = false; } };
+function setBusy(n, kind) { aiBusy = n ? { id: n.id, kind } : null; for (const v of V.values()) v.el.classList.toggle("busy", !!n && v.n.id === n.id); }
+
+/* ================= Compact line format (fewer tokens than JSON) ================= */
+function parseItem(line) {
+  const m = line.match(/^(\s*)[-*•]\s+(.+)$/); if (!m) return null;
+  const depth = Math.floor(m[1].replace(/\t/g, "  ").length / 2);
+  const [text, note, ref] = m[2].split("|").map(s => s.trim().replace(/^\*\*|\*\*$/g, ""));
+  if (!text) return null;
+  const n = { id: newId(), text: text.slice(0, 90), children: [] };
+  if (note) n.note = note.slice(0, 400); if (ref) n.ref = ref.slice(0, 40);
+  return { depth, n };
+}
+function lineFeeder(onLine) {
+  let buf = "", seen = 0;
+  return { feed(text) { const lines = text.split("\n"); for (; seen < lines.length - 1; seen++) onLine(lines[seen]); }, end(text) { const lines = text.split("\n"); for (; seen < lines.length; seen++) onLine(lines[seen]); } };
+}
+const byLine = m => m.author ? ` by ${m.author}` : "";
+
+async function grow(n) {
+  aiCtl = new AbortController(); setBusy(n, "grow"); renderPanel();
+  try {
+    const rec = await books.get(map.id), path = pathOf(n).map(x => x.text);
+    const ctx = passages(rec, [n.text, n.note, path.slice(1, -1).join(" ")].join(" "));
+    const prompt = `Book: "${map.root.text}"${byLine(map)}. Mind map path: ${path.join(" > ")}.
+${n.children.length ? `Already under it: ${n.children.map(c => c.text).join("; ")}.\n` : ""}Suggest 3 to 5 new, distinct ideas to add under "${n.text}"${ctx ? ", grounded in the passages" : ""}.
+Reply with only lines like: - Label (2-6 words) | note, max 14 words | where in the book (omit if unsure)
+${ctx ? `<passages>\n${ctx}\n</passages>` : ""}`;
+    const added = [];
+    const feeder = lineFeeder(line => { const it = parseItem(line); if (!it || added.length >= 6) return; if (!added.length) { pushUndo(); n.collapsed = false; } added.push(it.n); n.children.push(it.n); if (map && byId.has(n.id)) layout(); });
+    const { text } = await ask(prompt, { signal: aiCtl.signal, onText: ({ text }) => feeder.feed(text) });
+    feeder.end(text);
+    setBusy(null); layout(); renderPanel();
+    if (!added.length) panelErr("Claude didn't suggest anything new. Try again.");
+    else { changed(); toast(`Added ${added.length} ideas`); setTimeout(() => ensureVisible(n), 200); }
+  } catch (e) { setBusy(null); layout(); renderPanel(); if (n.children.length) changed(); if (e?.code !== "cancelled") panelErr(errText(e)); }
+}
+async function explain(n) {
+  aiCtl = new AbortController(); setBusy(n, "explain"); renderPanel();
+  const before = n.note || ""; const box = $("#pNote"); if (box) box.value = "Thinking…";
+  try {
+    const rec = await books.get(map.id), path = pathOf(n).map(x => x.text);
+    const ctx = passages(rec, [n.text, n.note, path.slice(1, -1).join(" ")].join(" "));
+    const prompt = `In 60 to 90 words of plain prose, explain "${n.text}" (${path.join(" > ")}) in the book "${map.root.text}"${byLine(map)}: what it means and one concrete detail from the book. No preamble.${ctx ? `\n<passages>\n${ctx}\n</passages>` : ""}`;
+    const { text } = await ask(prompt, { signal: aiCtl.signal, onText: ({ text }) => { const b = $("#pNote"); if (b && sel === n.id) b.value = text; } });
+    pushUndo(); n.note = text.trim(); setBusy(null); renderPanel(); changed();
+  } catch (e) { n.note = before; setBusy(null); renderPanel(); if (e?.code !== "cancelled") panelErr(errText(e)); }
+}
+
+/* ================= Opening ================= */
+function pickFirst() { const l = Object.values(maps).sort((a, b) => (b.updated || 0) - (a.updated || 0)); return l[0]?.id; }
+function setAura() {
+  const a = $("#aura"), img = $("#auraImg"), src = map ? coverOf(map) : "";
+  if (img.getAttribute("src") === src) return;
+  a.classList.add("swap");
+  setTimeout(() => { if (src) img.src = src; else img.removeAttribute("src"); a.classList.remove("swap"); }, 320);
+}
+function clearCanvas() { for (const v of V.values()) { v.el.remove(); v.edge?.remove(); } V.clear(); visible = []; }
+function openMap(id, opts = {}) {
+  endEdit(false);
+  const m = maps[id]; aiCtl?.abort(); setBusy(null); clearCanvas();
+  if (!m) { map = null; renderHeader(); renderPanel(); setAura(); return; }
+  map = m; sel = null; undo = []; redo = [];
+  revealNext = !opts.quiet; layout(); renderHeader(); renderLibrary(); renderPanel(); setAura(); fit(true);
+}
+function newBlank() {
+  const m = { id: newId(), created: Date.now(), updated: Date.now(), author: "", root: { id: newId(), text: "Central idea", note: "", children: [] } };
+  maps[m.id] = m; store.put(m); openMap(m.id); renderLibrary();
+  sel = m.root.id; layout(); renderPanel(); setTimeout(() => startEdit(m.root, false), 120);
+}
+
+/* ================= Export ================= */
+function mdOutline() {
+  const out = [`# ${map.root.text}`]; if (map.author) out.push(`*${map.author}*`); if (map.root.note) out.push("", map.root.note); out.push("");
+  (function w(n, d) { for (const c of n.children) { out.push(`${"  ".repeat(d)}- **${c.text}**${c.note ? ` — ${c.note.replace(/\s+/g, " ")}` : ""}${c.ref ? ` _(${c.ref})_` : ""}`); w(c, d + 1); } })(map.root, 0);
+  return out.join("\n") + "\n";
+}
+const slug = () => (map.root.text || "mind-map").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "mind-map";
+async function copyText(text) { try { await navigator.clipboard.writeText(text); toast("Outline copied"); } catch { toast("Couldn't copy here. Use Outline to save it instead."); } }
+async function exportPNG() {
+  if (!map) return;
+  let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity;
+  for (const v of V.values()) { if (v.dying) continue; a = Math.min(a, v.tx - v.w / 2 - 40); c = Math.max(c, v.tx + v.w / 2 + 40); b = Math.min(b, v.ty - v.h / 2 - 10); d = Math.max(d, v.ty + v.h / 2 + 10); }
+  const pad = 60, W = c - a + pad * 2, H = d - b + pad * 2;
+  const clone = world.cloneNode(true);
+  clone.querySelectorAll(".hl").forEach(e => { if (e.getAttribute("opacity") === "0") e.remove(); });
+  clone.setAttribute("transform", `translate(${pad - a},${pad - b})`);
+  const str = `<svg xmlns="${NS}" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="100%" height="100%" fill="${T.solid}"/>${new XMLSerializer().serializeToString(clone)}</svg>`;
+  const img = new Image(); img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(str);
+  try { await img.decode(); } catch { return toast("Couldn't draw the image."); }
+  const scale = Math.min(2, 8000 / Math.max(W, H)), cv = document.createElement("canvas"); cv.width = Math.round(W * scale); cv.height = Math.round(H * scale);
+  const ctx = cv.getContext("2d"); ctx.scale(scale, scale); ctx.drawImage(img, 0, 0);
+  const blob = await new Promise(r => cv.toBlob(r, "image/png"));
+  if (!blob) return toast("Couldn't draw the image.");
+  await saveFile(slug() + ".png", blob);
+}
+async function exportMD() {
+  if (!map) return;
+  await saveFile(slug() + ".md", new Blob([mdOutline()], { type: "text/markdown" }));
+}
+
+/* ================= Import ================= */
+let book = null, importState = "pick", importFocus = "ideas", importSize = "overview", importSharp = false, genCtl = null, generating = false;
+const sheet = $("#sheet");
+function openImport(file) { if (generating) return toast("A map is still being drawn"); $("#scrim").hidden = false; $("#books").classList.remove("open"); importState = "pick"; book = null; renderSheet(); if (file) handleFile(file); }
+function closeImport() { $("#scrim").hidden = true; }
+$("#scrim").addEventListener("pointerdown", e => { if (e.target.id === "scrim") closeImport(); });
+function buildPrompt() {
+  const by = book.author ? ` by ${book.author}` : "", S = SIZE[importSize];
+  if (book._skimFor !== importSize) { book._skim = skim(book.text, book.sections, S.skim); book._skimFor = importSize; }
+  const { skim: sk, terms } = book._skim;
+  const toc = book.sections.map(s => s.title).join("; ").slice(0, 2500);
+  return `Make a mind map of the book "${book.title}"${by}.
+Focus on ${FOCUS[importFocus].instr}. Size: ${S.instr}.
+Below are the contents, frequent terms and key sentences picked from each section. Use them plus what you reliably know about this book.
+Reply with only lines in this format, no other text:
+# Book title | Author
+> One-sentence summary of the book
+- Branch label | short note | where in the book
+  - Idea label | short note | where
+    - Detail label | short note
+Indent children by two spaces. Labels 2 to 6 words. Notes at most 14 words. Leave out "where" if unsure. Same language as the book.
+<contents>${toc}</contents>
+<terms>${terms.join(", ")}</terms>
+<sections>
+${sk}
+</sections>`;
+}
+let keyBack = null;
+function openKey(err) { if (generating) return toast("A map is still being drawn"); keyBack = $("#scrim").hidden ? null : importState; $("#scrim").hidden = false; $("#books").classList.remove("open"); importState = "key"; renderSheet({ err }); }
+function renderKey(extra) {
+  const has = !!getKey();
+  sheet.innerHTML = `<div class="top"><span class="h">API key</span><button class="ln" type="button" id="sx">Close</button></div>
+    <p>Marginalia talks to Claude with your own Anthropic API key. It is stored only on this device and sent only to api.anthropic.com, so nobody else who opens this page can use it.</p>
+    <p class="dim">Make one at console.anthropic.com under API keys. Setting a monthly spend limit there is a good idea. A map costs about a cent on the light model.</p>
+    <input class="keyin" id="keyIn" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${has ? "Saved. Paste a new one to replace it" : "sk-ant-…"}">
+    ${extra.err ? `<div class="err">${esc(extra.err)}</div>` : ""}
+    <div class="go"><button class="ln big" type="button" id="keySave">Save key ↗</button>${has ? `<button class="ln dim" type="button" id="keyDel">Remove from this device</button>` : ""}</div>`;
+  const back = () => { if (keyBack === "ready" && book) { importState = "ready"; renderSheet(); } else closeImport(); };
+  sheet.querySelector("#sx").onclick = back;
+  sheet.querySelector("#keyDel")?.addEventListener("click", () => { setKey(""); renderKeyLink(); toast("Key removed"); renderSheet(); });
+  sheet.querySelector("#keySave").onclick = async () => {
+    const k = sheet.querySelector("#keyIn").value.trim();
+    if (!/^sk-ant-/.test(k)) return renderSheet({ err: "That doesn't look like an Anthropic API key. It starts with sk-ant-." });
+    sheet.querySelector("#keySave").textContent = "Checking…";
+    // listing models is free, so this checks the key without spending anything
+    try { const r = await fetch(API + "models?limit=1", { headers: apiHeaders(k) }); if (r.status === 401 || r.status === 403) return renderSheet({ err: errText({ code: "auth" }) }); }
+    catch { return renderSheet({ err: errText({ code: "network" }) }); }
+    setKey(k); renderKeyLink(); toast("Key saved on this device"); back();
+  };
+}
+const renderKeyLink = () => { $("#keyLink").textContent = getKey() ? "API key" : "Add your API key ↗"; };
+function renderSheet(extra = {}) {
+  if (importState === "key") return renderKey(extra);
+  const top = `<div class="top"><span class="h">Map a book</span><button class="ln" type="button" id="sx">Close</button></div>`;
+  if (importState === "pick" || importState === "parsing") {
+    const parsing = importState === "parsing";
+    sheet.innerHTML = top + `
+      <div class="drop" id="drop"><span class="big">${parsing ? "Opening the book" : "Drop a book here"}</span>
+        <span class="dim" id="dropMsg">${parsing ? esc(extra.msg || "") : "PDF, EPUB or plain text"}</span>
+        ${parsing ? "" : `<button class="ln" type="button" id="choose" style="margin-top:8px;font-size:15px">Choose a file ↗</button>`}</div>
+      ${extra.err ? `<div class="err">${esc(extra.err)}</div>` : ""}
+      ${parsing ? "" : `<div><button class="ln" type="button" id="pasteToggle">Or paste text</button></div>
+      <div id="pasteBox" hidden><textarea class="paste" id="pasteText" placeholder="Paste a chapter, an article or a whole book"></textarea><button class="ln" type="button" id="pasteGo">Use this text</button></div>`}`;
+    const drop = sheet.querySelector("#drop");
+    ["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+    ["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, () => drop.classList.remove("over")));
+    drop.addEventListener("drop", e => { e.preventDefault(); e.stopPropagation(); const f = e.dataTransfer.files[0]; if (f) handleFile(f); });
+    sheet.querySelector("#choose")?.addEventListener("click", () => $("#fileInput").click());
+    sheet.querySelector("#pasteToggle")?.addEventListener("click", () => { const b = sheet.querySelector("#pasteBox"); b.hidden = !b.hidden; });
+    sheet.querySelector("#pasteGo")?.addEventListener("click", () => {
+      const t = cleanText(sheet.querySelector("#pasteText").value);
+      if (t.length < 200) return renderSheet({ err: "Paste at least a few paragraphs so there's something to map." });
+      setBook({ raw: t }, titleFromName(t.split("\n")[0].slice(0, 60)));
+    });
+  } else if (importState === "ready") {
+    const est = Math.round((buildPrompt().length + SIZE[importSize].lines * 75) / 4 * (importSharp ? 1.8 : 1));
+    sheet.innerHTML = top + `
+      <div class="book"><img src="${book.cover || typeCover(book.title, book.author)}" alt=""><div class="f">
+        <input class="bt" id="bt" value="${esc(book.title)}" aria-label="Title" placeholder="Title">
+        <input id="ba" value="${esc(book.author || "")}" aria-label="Author" placeholder="Author">
+        <span class="dim">${book.pages ? `${book.pages} pages, ` : ""}${book.words.toLocaleString()} words, ${book.sections.length} sections</span>
+      </div></div>
+      ${book.text.length < 3000 ? `<div class="err">This file has very little text. A scanned PDF needs text recognition (OCR) before it can be mapped.</div>` : ""}
+      <div class="opts">
+        <div class="opt"><span class="h">What to map</span>${Object.entries(FOCUS).map(([k, f]) => `<label><input type="radio" name="focus" value="${k}" ${k === importFocus ? "checked" : ""}>${f.label}</label>`).join("")}</div>
+        <div class="opt"><span class="h">Detail</span>${Object.entries(SIZE).map(([k, f]) => `<label><input type="radio" name="size" value="${k}" ${k === importSize ? "checked" : ""}>${f.label}, about ${f.lines} ideas</label>`).join("")}
+          <span class="h" style="margin-top:10px">Model</span>
+          <label><input type="radio" name="tier" value="light" ${!importSharp ? "checked" : ""}>Light, uses the least</label>
+          <label><input type="radio" name="tier" value="sharp" ${importSharp ? "checked" : ""}>Sharper, uses more</label></div>
+      </div>
+      ${extra.err ? `<div class="err">${esc(extra.err)}</div>` : ""}
+      <div class="go"><button class="ln big" type="button" id="go">Draw the map ↗</button><span class="dim">About ${est >= 1000 ? (est / 1000).toFixed(1) + "k" : est} tokens. The book is read on your device first.</span></div>
+      <div><button class="ln dim" type="button" id="other">Choose a different book</button></div>`;
+    const rerender = () => { book.title = sheet.querySelector("#bt").value; book.author = sheet.querySelector("#ba").value; renderSheet(); };
+    sheet.querySelectorAll("input[name=focus]").forEach(i => i.onchange = () => { importFocus = i.value; rerender(); });
+    sheet.querySelectorAll("input[name=size]").forEach(i => i.onchange = () => { importSize = i.value; rerender(); });
+    sheet.querySelectorAll("input[name=tier]").forEach(i => i.onchange = () => { importSharp = i.value === "sharp"; rerender(); });
+    sheet.querySelector("#other").onclick = () => { importState = "pick"; book = null; renderSheet(); };
+    sheet.querySelector("#go").onclick = () => { book.title = sheet.querySelector("#bt").value.trim() || "Untitled book"; book.author = sheet.querySelector("#ba").value.trim(); generate(); };
+  }
+  sheet.querySelector("#sx").onclick = closeImport;
+}
+const cleanText = t => t.replace(/\r/g, "").replace(/[ \t ]+/g, " ").replace(/ *\n */g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+function setBook(r, fallbackTitle) {
+  const text = cleanText(r.raw || "");
+  // hints were measured on raw text; map them by ratio after cleaning
+  const ratio = text.length / Math.max(1, (r.raw || "").length);
+  const hints = (r.hints || []).map(h => ({ title: h.title, start: Math.floor(h.start * ratio) }));
+  const badTitle = !r.title || /^(untitled|microsoft word|document|\s*$)/i.test(r.title);
+  book = { text, title: badTitle ? fallbackTitle : r.title.trim(), author: (r.author || "").trim(), pages: r.pages, cover: r.cover, words: text.split(/\s+/).length, sections: findSections(text, hints) };
+  importState = "ready"; renderSheet();
+}
+$("#fileInput").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; if (f) handleFile(f); });
+async function handleFile(file) {
+  importState = "parsing"; renderSheet({ msg: file.name });
+  try {
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
+    const prog = msg => { const s = $("#dropMsg"); if (s) s.textContent = msg; };
+    let r;
+    if (ext === "pdf" || file.type === "application/pdf") r = await readPDF(file, prog);
+    else if (ext === "epub" || file.type === "application/epub+zip") r = await readEPUB(file, prog);
+    else if (["txt", "md", "markdown", "text"].includes(ext) || file.type.startsWith("text/")) r = { raw: await file.text() };
+    else throw new Error("That file type isn't supported. Use a PDF, EPUB or plain text file.");
+    if (cleanText(r.raw || "").length < 200) throw new Error("No readable text was found. A scanned PDF needs text recognition (OCR) first.");
+    setBook(r, titleFromName(file.name));
+  } catch (e) { importState = "pick"; renderSheet({ err: e.message || "Couldn't read that file." }); }
+}
+
+/* the map grows on screen while Claude writes it */
+async function generate() {
+  if (!getKey()) return openKey("Add your API key, then draw the map.");
+  const prompt = buildPrompt(), b = book;
+  const m = { id: newId(), created: Date.now(), updated: Date.now(), author: b.author, focus: importFocus, size: importSize, cover: b.cover || null, root: { id: newId(), text: b.title, note: "", children: [] } };
+  maps[m.id] = m; closeImport(); openMap(m.id, { quiet: true }); renderLibrary();
+  books.put(m.id, { text: b.text, sections: b.sections });
+  generating = true; genCtl = new AbortController();
+  const status = $("#status"); let count = 0;
+  const setStatus = msg => { status.hidden = false; status.innerHTML = `<span>${esc(msg)}</span><button class="ln" type="button" id="stopGen">Stop</button>`; status.querySelector("#stopGen").onclick = () => genCtl.abort(); };
+  setStatus("Claude is reading the highlights…");
+  const stack = [m.root]; let lastFit = 0;
+  const feeder = lineFeeder(line => {
+    const t = line.trim();
+    if (t.startsWith("# ")) { const [ti, au] = t.slice(2).split("|").map(x => x.trim()); if (au && !m.author) m.author = au.slice(0, 120); if (ti && !b.title) m.root.text = ti; return; }
+    if (t.startsWith("> ")) { m.root.note = t.slice(2).trim(); return; }
+    const it = parseItem(line); if (!it) return;
+    const d = Math.min(it.depth, stack.length - 1), parent = stack[d];
+    parent.children.push(it.n); stack.length = d + 1; stack.push(it.n); count++;
+    if (map === m) { layout(); if (count - lastFit >= 6) { lastFit = count; fit(); } renderHeader(); }
+    setStatus(`Drawing, ${count} ideas`);
+  });
+  try {
+    const opts = { signal: genCtl.signal, onText: ({ text }) => feeder.feed(text) };
+    if (importSharp) opts.modelTier = "default";
+    const { text } = await ask(prompt, opts);
+    feeder.end(text);
+    if (count < 3) throw { message: "Claude's answer didn't contain a map. Try again." };
+    toast(`Mapped ${count} ideas`);
+  } catch (e) {
+    if (e?.code === "cancelled" && count >= 3) toast(`Stopped. Kept ${count} ideas.`);
+    else if (count < 3) { delete maps[m.id]; books.del(m.id); if (map === m) openMap(pickFirst()); renderLibrary(); $("#scrim").hidden = false; importState = "ready"; book = b; renderSheet({ err: errText(e) }); }
+    else toast(errText(e));
+  } finally {
+    generating = false; status.hidden = true;
+    if (maps[m.id]) { m.updated = Date.now(); store.put(m); if (map === m) { layout(); renderHeader(); renderPanel(); setTimeout(() => fit(), 100); } renderLibrary(); }
+  }
+}
+
+/* ================= Wiring ================= */
+let toastT = 0;
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 2200); }
+function act(a) {
+  const vp = viewport();
+  ({
+    newBook: () => openImport(), newBlank, books: () => $("#books").classList.toggle("open"),
+    fit: () => fit(), zoomIn: () => zoomAt(vp.w / 2, vp.top + vp.h / 2, 1.25, true), zoomOut: () => zoomAt(vp.w / 2, vp.top + vp.h / 2, .8, true),
+    undo: doUndo, redo: doRedo, level1: () => setLevel(1), level2: () => setLevel(2), level99: () => setLevel(99),
+    png: exportPNG, md: exportMD, copy: () => map && copyText(mdOutline()), key: () => openKey()
+  })[a]?.();
+}
+document.addEventListener("click", e => { const b = e.target.closest("[data-act]"); if (b) act(b.dataset.act); });
+document.addEventListener("dragover", e => { if (e.dataTransfer?.types?.includes("Files")) e.preventDefault(); });
+document.addEventListener("drop", e => { const f = e.dataTransfer?.files?.[0]; if (f) { e.preventDefault(); openImport(f); } });
+const retheme = () => { readTheme(); for (const v of V.values()) v.sig = ""; if (map) layout(); };
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", retheme);
+new MutationObserver(retheme).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+let rzT = 0; addEventListener("resize", () => { clearTimeout(rzT); rzT = setTimeout(() => fit(), 150); });
+document.fonts?.ready.then(() => { mcache.clear(); coverCache.clear(); renderLibrary(); setAura(); $("#auraImg").src = map ? coverOf(map) : ""; if (map) { for (const v of V.values()) v.sig = ""; layout(); fit(); } });
+
+readTheme();
+maps = store.loadLocal();
+if (!Object.keys(maps).length) maps[exampleMap().id] = exampleMap();
+renderUsage(); renderKeyLink(); renderLibrary(); openMap(pickFirst());
+navigator.storage?.persist?.().catch(() => {});
+if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+})();
+</script>
+
+</body>
+</html>
